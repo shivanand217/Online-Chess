@@ -1,4 +1,4 @@
-# Chess — Production-Grade Distributed Real-Time Chess Platform
+# Production-Grade Distributed Real-Time Chess Platform - like chess.com
 
 A staff-level portfolio build of an online chess platform, engineered the way a
 real product at scale would be: skill-based matchmaking, authoritative real-time
