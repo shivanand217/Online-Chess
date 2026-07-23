@@ -1,0 +1,4 @@
+# Declares which globs pnpm treats as workspace packages. Hand-written.
+packages:
+  - 'apps/*'
+  - 'packages/*'
