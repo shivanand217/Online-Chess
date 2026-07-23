@@ -1,0 +1,21 @@
+{
+  "//": "Shared observability: Pino logger, health/readiness/metrics routes, graceful shutdown. OTel SDK added in Phase 5. Hand-written.",
+  "name": "@chess/telemetry",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "fastify": "^5.2.0"
+  }
+}

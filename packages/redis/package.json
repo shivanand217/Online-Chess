@@ -1,0 +1,18 @@
+{
+  "//": "Shared Redis (ioredis) client factory; home for Lua scripts (matchmaking claim) added in Phase 2. Hand-written.",
+  "name": "@chess/redis",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "ioredis": "^5.4.2"
+  }
+}

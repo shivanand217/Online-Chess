@@ -1,0 +1,18 @@
+{
+  "//": "Shared wire contracts (REST DTOs + WebSocket message schemas) as zod, used by client and server. Hand-written.",
+  "name": "@chess/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  }
+}

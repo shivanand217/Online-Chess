@@ -1,0 +1,9 @@
+// TypeScript config for the gateway app; extends the workspace base. Hand-written.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

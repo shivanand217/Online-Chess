@@ -1,0 +1,15 @@
+# Prometheus scrape config for local dev. Scrapes each service's /metrics on the host (Docker Desktop
+# exposes the host as host.docker.internal). Metrics themselves are populated in Phase 5. Hand-written.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: chess-services
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:3000' # gateway
+          - 'host.docker.internal:3001' # matchmaker
+          - 'host.docker.internal:3002' # session-router
+          - 'host.docker.internal:3003' # game-server
+          - 'host.docker.internal:3004' # leaderboard

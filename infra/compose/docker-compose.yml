@@ -1,0 +1,89 @@
+# Local development stack. Core services (postgres/redis/etcd) start by default; the observability trio
+# (prometheus/grafana/tempo) is gated behind the `observability` profile. Hand-written.
+# Usage: `pnpm stack:up` (core) or `pnpm stack:up:obs` (core + observability).
+
+name: chess
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: chess
+      POSTGRES_PASSWORD: chess
+      POSTGRES_DB: chess
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U chess -d chess']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.17
+    command:
+      - etcd
+      - --name=etcd0
+      - --data-dir=/etcd-data
+      - --advertise-client-urls=http://0.0.0.0:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+    ports:
+      - '2379:2379'
+    volumes:
+      - etcddata:/etcd-data
+    healthcheck:
+      test: ['CMD', 'etcdctl', 'endpoint', 'health']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles: ['observability']
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    profiles: ['observability']
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: 'Admin'
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - '3100:3000'
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+
+  tempo:
+    image: grafana/tempo:2.7.0
+    profiles: ['observability']
+    command: ['-config.file=/etc/tempo/tempo.yml']
+    ports:
+      - '3200:3200' # tempo query
+      - '4317:4317' # OTLP gRPC
+      - '4318:4318' # OTLP HTTP
+    volumes:
+      - ./tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+
+volumes:
+  pgdata:
+  redisdata:
+  etcddata:

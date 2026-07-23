@@ -1,0 +1,20 @@
+{
+  "//": "API Gateway service: REST edge (auth, matchmaking long-poll, leaderboard reads). Phase 0 = health only. Hand-written.",
+  "name": "@chess/gateway",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@chess/config": "workspace:*",
+    "@chess/telemetry": "workspace:*",
+    "fastify": "^5.2.0"
+  }
+}

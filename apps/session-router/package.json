@@ -1,0 +1,20 @@
+{
+  "//": "Session Router: maps gameId -> game server via consistent hashing over etcd membership. Phase 0 = health only. Hand-written.",
+  "name": "@chess/session-router",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@chess/config": "workspace:*",
+    "@chess/telemetry": "workspace:*",
+    "fastify": "^5.2.0"
+  }
+}
