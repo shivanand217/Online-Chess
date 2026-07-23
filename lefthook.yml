@@ -1,3 +1,4 @@
+# Git hooks (lefthook): runs prettier + eslint on staged files before each commit. Hand-written.
 pre-commit:
   parallel: true
   commands:

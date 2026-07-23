@@ -1,3 +1,4 @@
+# Files/dirs git should never track (build output, deps, secrets). Hand-written.
 node_modules/
 dist/
 .turbo/
