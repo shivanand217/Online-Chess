@@ -33,6 +33,7 @@ flowchart TB
 ```
 
 ### Why two load balancers
+
 - **REST** (gateway) → standard **HTTPS L7 LB** with managed TLS.
 - **WebSockets** (game servers) → **TCP proxy / passthrough LB with session
   affinity**, because a game socket must stay pinned to the pod that holds the
@@ -62,6 +63,7 @@ State in a GCS backend; environments as workspaces or separate state.
 ## Kubernetes objects (Helm)
 
 Per service (`infra/helm/<service>`):
+
 - `Deployment` (game-server is a Deployment with stable identity semantics via a
   headless Service; it does **not** need a real StatefulSet because state is
   recoverable via replay, not persistent volumes).
@@ -79,12 +81,12 @@ KEDA, External Secrets Operator.
 
 ## Autoscaling
 
-| Service | Scaler | Signal |
-|---|---|---|
-| gateway | HPA | CPU + RPS |
-| matchmaker | **KEDA** | Redis pool depth (`matchmaking_pool_size`) — scale to the queue, not CPU |
-| game-server | HPA | `ws_connections` / `active_games` per pod (custom metric) + memory |
-| leaderboard | HPA | CPU + apply-queue lag |
+| Service     | Scaler   | Signal                                                                   |
+| ----------- | -------- | ------------------------------------------------------------------------ |
+| gateway     | HPA      | CPU + RPS                                                                |
+| matchmaker  | **KEDA** | Redis pool depth (`matchmaking_pool_size`) — scale to the queue, not CPU |
+| game-server | HPA      | `ws_connections` / `active_games` per pod (custom metric) + memory       |
+| leaderboard | HPA      | CPU + apply-queue lag                                                    |
 
 **Scale-up caveat (from Deep Dive 2):** adding game-server pods during peak remaps
 a slice of healthy games onto new nodes (a brief reconnect). We scale the fleet
@@ -136,6 +138,6 @@ flowchart LR
 ## Cost / scale note for the portfolio
 
 The design target is 1M connections; the portfolio runs a **small GKE cluster**
-and validates proportionally (Phase 8). Everything here is written so the *same*
+and validates proportionally (Phase 8). Everything here is written so the _same_
 manifests scale to the target by raising replica counts and node-pool sizes — the
 architecture doesn't change between the demo cluster and the 1M-connection target.

@@ -6,18 +6,19 @@ unified by OpenTelemetry and correlation IDs.
 
 ## SLOs (what we actually promise)
 
-| SLO | Target | Measured by |
-|---|---|---|
-| **Move propagation latency** | p99 < 200 ms (end-to-end move → opponent board) | `move_propagation_ms` histogram |
-| **Gameplay availability** | 99.9% of active games not force-terminated by our failure | successful-game ratio |
-| **Match wait time** | p95 < a tuned budget per time control | `matchmaking_wait_ms` histogram |
-| **Leaderboard freshness** | rating reflected < 5 s after game end | `elo_apply_lag_ms` |
+| SLO                          | Target                                                    | Measured by                     |
+| ---------------------------- | --------------------------------------------------------- | ------------------------------- |
+| **Move propagation latency** | p99 < 200 ms (end-to-end move → opponent board)           | `move_propagation_ms` histogram |
+| **Gameplay availability**    | 99.9% of active games not force-terminated by our failure | successful-game ratio           |
+| **Match wait time**          | p95 < a tuned budget per time control                     | `matchmaking_wait_ms` histogram |
+| **Leaderboard freshness**    | rating reflected < 5 s after game end                     | `elo_apply_lag_ms`              |
 
 Alerts are **multi-window burn-rate** on these SLOs, not raw threshold spam.
 
 ## Metrics
 
 ### RED per service (all services)
+
 - **Rate** — requests/messages per second.
 - **Errors** — error ratio (HTTP 5xx, WS protocol errors, rejected moves by
   reason).
@@ -25,23 +26,24 @@ Alerts are **multi-window burn-rate** on these SLOs, not raw threshold spam.
 
 ### Domain metrics (the ones that make this chess)
 
-| Metric | Type | Service | Why it matters |
-|---|---|---|---|
-| `matchmaking_pool_size{timeControl}` | gauge | matchmaker | queue depth → KEDA scaling + wait insight |
-| `matchmaking_wait_ms` | histogram | matchmaker | fairness of the widening policy |
-| `matchmaking_claim_contention` | counter | matchmaker | `ZREM`-returned-0 rate → hot-band pressure |
-| `active_games` | gauge | game-server | fleet load, per-node game count |
-| `ws_connections` | gauge | game-server | connection density vs node budget |
-| `move_propagation_ms` | histogram | game-server | **the NFR-1 SLO** |
-| `move_validation_ms` | histogram | game-server | in-memory hot-path health |
-| `move_persist_ms` | histogram | game-server | the pre-broadcast durable write |
-| `clock_compensation_ms` | histogram | game-server | latency-comp effect + cap saturation |
-| `game_recoveries_total{reason}` | counter | game-server | crash/reassign churn |
-| `fence_rejections_total` | counter | game-server | zombie writes stopped (should be rare) |
-| `elo_apply_lag_ms` | histogram | leaderboard | leaderboard freshness SLO |
-| `leaderboard_drift` | gauge | leaderboard | reconciliation health (should be ~0) |
+| Metric                               | Type      | Service     | Why it matters                             |
+| ------------------------------------ | --------- | ----------- | ------------------------------------------ |
+| `matchmaking_pool_size{timeControl}` | gauge     | matchmaker  | queue depth → KEDA scaling + wait insight  |
+| `matchmaking_wait_ms`                | histogram | matchmaker  | fairness of the widening policy            |
+| `matchmaking_claim_contention`       | counter   | matchmaker  | `ZREM`-returned-0 rate → hot-band pressure |
+| `active_games`                       | gauge     | game-server | fleet load, per-node game count            |
+| `ws_connections`                     | gauge     | game-server | connection density vs node budget          |
+| `move_propagation_ms`                | histogram | game-server | **the NFR-1 SLO**                          |
+| `move_validation_ms`                 | histogram | game-server | in-memory hot-path health                  |
+| `move_persist_ms`                    | histogram | game-server | the pre-broadcast durable write            |
+| `clock_compensation_ms`              | histogram | game-server | latency-comp effect + cap saturation       |
+| `game_recoveries_total{reason}`      | counter   | game-server | crash/reassign churn                       |
+| `fence_rejections_total`             | counter   | game-server | zombie writes stopped (should be rare)     |
+| `elo_apply_lag_ms`                   | histogram | leaderboard | leaderboard freshness SLO                  |
+| `leaderboard_drift`                  | gauge     | leaderboard | reconciliation health (should be ~0)       |
 
 ### Infra (USE)
+
 Utilization / Saturation / Errors on pods, nodes, Postgres (connections, replica
 lag), Redis (ops/s, memory, `ZADD`/`ZREM` rates), etcd (watch latency, lease
 churn).
@@ -88,7 +90,7 @@ carried `traceparent`, so a game's whole life is one linked story.
 
 - `/healthz` — **liveness**: process is up (cheap, no deps).
 - `/readyz` — **readiness**: dependencies reachable (DB, Redis, etcd, registered in
-  ring). Game servers report *not ready* while draining.
+  ring). Game servers report _not ready_ while draining.
 - **Graceful shutdown** (critical for the stateful fleet): on SIGTERM a game
   server deregisters its etcd node, stops accepting new games, lets in-flight
   games finish or checkpoints them (they're recoverable via replay anyway), drains
@@ -96,12 +98,12 @@ carried `traceparent`, so a game's whole life is one linked story.
 
 ## Alerting (starter set)
 
-| Alert | Condition |
-|---|---|
-| Move latency SLO burn | `move_propagation_ms` p99 > 200 ms, multi-window burn |
-| Match starvation | `matchmaking_wait_ms` p95 over budget for 5m |
-| Fence storm | `fence_rejections_total` rate spikes (partition / split-brain) |
-| Recovery churn | `game_recoveries_total` rate high (flapping nodes) |
-| Leaderboard drift | `leaderboard_drift` > 0 after reconciliation |
-| Redis saturation | Redis ops/s or memory approaching node limits |
-| Postgres replica lag | leaderboard read replica lag high |
+| Alert                 | Condition                                                      |
+| --------------------- | -------------------------------------------------------------- |
+| Move latency SLO burn | `move_propagation_ms` p99 > 200 ms, multi-window burn          |
+| Match starvation      | `matchmaking_wait_ms` p95 over budget for 5m                   |
+| Fence storm           | `fence_rejections_total` rate spikes (partition / split-brain) |
+| Recovery churn        | `game_recoveries_total` rate high (flapping nodes)             |
+| Leaderboard drift     | `leaderboard_drift` > 0 after reconciliation                   |
+| Redis saturation      | Redis ops/s or memory approaching node limits                  |
+| Postgres replica lag  | leaderboard read replica lag high                              |

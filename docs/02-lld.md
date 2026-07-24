@@ -128,13 +128,13 @@ client and server, so the contract is typed on both ends.
 
 ## Why stateful game servers
 
-| | Stateless + shared store | **Stateful + in-memory (chosen)** |
-|---|---|---|
-| Move validation | network read+write per move | local, microseconds |
-| Hot-path cost | 2 network hops inside 200 ms | 1 async persist off hot path |
-| Routing | any server handles any move | both players must co-locate |
-| Crash | nothing lost (state external) | in-flight games need recovery |
-| Cost of the state | pay to externalize ~hundreds of bytes | free — it lives in process |
+|                   | Stateless + shared store              | **Stateful + in-memory (chosen)** |
+| ----------------- | ------------------------------------- | --------------------------------- |
+| Move validation   | network read+write per move           | local, microseconds               |
+| Hot-path cost     | 2 network hops inside 200 ms          | 1 async persist off hot path      |
+| Routing           | any server handles any move           | both players must co-locate       |
+| Crash             | nothing lost (state external)         | in-flight games need recovery     |
+| Cost of the state | pay to externalize ~hundreds of bytes | free — it lives in process        |
 
 Chess state is tiny and short-lived, and we already write a move log for
 recovery, so the "hard parts" of stateful (routing + crash) are solvable and
@@ -145,8 +145,8 @@ long-lived — which chess is not.
 
 ## Deep Dive 1 — Fair matchmaking at scale
 
-**Problem.** ~30K req/s at peak. A match is a *range search* for the nearest
-compatible rating in the same time control, then a *read-modify-write claim*
+**Problem.** ~30K req/s at peak. A match is a _range search_ for the nearest
+compatible rating in the same time control, then a _read-modify-write claim_
 before another worker grabs the opponent. The mid-rating band is thick, so the
 same waiters are candidates for huge numbers of incoming requests at once →
 structural contention. And rating extremes have almost no online peers.
@@ -185,7 +185,7 @@ local removed = redis.call('ZREM', KEYS[1], ARGV[1])
 if removed == 1 then return 1 else return 0 end
 ```
 
-We run the *find compatible + claim self + claim opponent + create game* as a
+We run the _find compatible + claim self + claim opponent + create game_ as a
 small atomic step (Lua) so a request can't claim an opponent while itself being
 claimed. Roughly **~4 Redis ops per request**, matching the capacity math.
 
@@ -200,7 +200,7 @@ PUBLISH match:req_8a3f {"gameId":"..."}    # worker publishes
 ```
 
 **Caveat:** if the waiter's connection is already gone (long-poll dropped/timed
-out before the claim), the pairing is void — the worker `ZADD`s the *other*
+out before the claim), the pairing is void — the worker `ZADD`s the _other_
 player back into the pool so nobody is orphaned on a match the peer never got.
 
 ### Do we shard the pool? — No, and prove it
@@ -288,7 +288,7 @@ reassigned game.
 4. S' loads G's row, replays moves, reads gen N, bumps to N+1 as new owner.
 5. A delayed write from partitioned-but-alive S lands at gen N, fails
    `generation <= N+1`... wait — it fails because S carries N while the row is now
-   N+1, so `N <= N+1` is true but S writes `generation = N`, moving it *backwards*;
+   N+1, so `N <= N+1` is true but S writes `generation = N`, moving it _backwards_;
    we additionally require the new owner's writes to carry the **current** gen, and
    S's stale-gen write loses because S' already advanced the row. Net: the zombie's
    mutation is rejected. (Implementation guards on `generation < :gen` for
@@ -297,6 +297,7 @@ reassigned game.
 ### Player disconnect ≠ server failure
 
 The clock rule **flips**:
+
 - **Server failure** → pause the clock during the reconnect blip (consistency
   over availability). Recovery is a row read + replaying a few hundred bytes.
 - **Player disconnect** (closed tab) → clock **keeps running**, maybe a short
@@ -318,7 +319,7 @@ reconnect) — a small price for chess.
 
 ## Deep Dive 3 — Fair clocks under uneven latency
 
-The server owns the clock and can only start/stop when a move actually *arrives*,
+The server owns the clock and can only start/stop when a move actually _arrives_,
 so each player's network latency comes out of their own clock. A 200 ms-distant
 player pays ~170 ms more per move than a 30 ms player → ~7 s bled over a 40-move
 blitz game. Systematic geographic disadvantage.
@@ -359,6 +360,7 @@ UI smooths the brief disagreement between local display and authoritative time.
 ## Deep Dive 4 — Leaderboard correct & fast at 10M
 
 Two very different reads:
+
 - **Top-N** — solved: btree on `rating` (or `ZREVRANGE 0 49`) + cache a page that
   barely moves.
 - **My rank** — the hard one. `COUNT(*) WHERE rating > :mine` is **O(rank)** on a

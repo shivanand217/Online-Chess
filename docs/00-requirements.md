@@ -24,18 +24,18 @@ up as **stretch goals** in [Phase 9](04-project-plan.md#phase-9--stretch--below-
 
 ## Non-functional requirements
 
-| # | Requirement | Target |
-|---|-------------|--------|
-| NFR-1 | **Low-latency move propagation** | p99 end-to-end move → opponent's board **< 200 ms** |
+| #     | Requirement                                      | Target                                                                                                   |
+| ----- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| NFR-1 | **Low-latency move propagation**                 | p99 end-to-end move → opponent's board **< 200 ms**                                                      |
 | NFR-2 | **Consistency over availability for game state** | On unreachable game server, **pause** the game (recoverable) rather than let two clients drift (corrupt) |
-| NFR-3 | **Scale** | 500K concurrent games = **1M concurrent WS connections** at peak |
-| NFR-4 | **Clock fairness** | Network transit must not systematically penalize distant players |
+| NFR-3 | **Scale**                                        | 500K concurrent games = **1M concurrent WS connections** at peak                                         |
+| NFR-4 | **Clock fairness**                               | Network transit must not systematically penalize distant players                                         |
 
 ### Below the line (NFR)
 
 - Account security / abuse beyond fair-play.
 - GDPR / data-privacy compliance.
-- (We *do* build monitoring, CI/CD, and zero-downtime deploys — they're core to
+- (We _do_ build monitoring, CI/CD, and zero-downtime deploys — they're core to
   the "production-grade" goal of this project, unlike the reference design where
   they were out of scope.)
 
@@ -88,7 +88,7 @@ broadcast (durability ordering — see LLD).
 
 ### Game-server fleet sizing
 
-A box holds tens of thousands of *idle* sockets, but a live game server also
+A box holds tens of thousands of _idle_ sockets, but a live game server also
 validates moves and runs clocks, so realistic per-node game counts are lower.
 
 ```

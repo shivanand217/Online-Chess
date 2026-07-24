@@ -5,7 +5,7 @@ real-time game is the heart and gets the most attention.
 
 ## Core entities
 
-- **Player** — identity + ELO rating. Rating drives matchmaking *and* leaderboard.
+- **Player** — identity + ELO rating. Rating drives matchmaking _and_ leaderboard.
 - **Game** — one game between two players: colors, current position, whose turn,
   clock state, result, and the snapshotted pre-game ratings (so each game's ELO
   delta is self-contained).
@@ -15,13 +15,13 @@ real-time game is the heart and gets the most attention.
 
 ## Services
 
-| Service | Statefulness | Responsibility |
-|---------|--------------|----------------|
-| **API Gateway** | stateless | Auth (JWT), REST for matchmaking + leaderboard, holds the matchmaking long-poll |
-| **Matchmaker** | stateless workers | Find + atomically claim compatible opponents from the Redis pool, create Games |
-| **Session Router** | stateless | Map `gameId → game server` via consistent hashing over live membership |
-| **Game Server** | **stateful (in-memory)** | Own the authoritative board + clocks, validate moves, broadcast, persist move log |
-| **Leaderboard** | stateless workers + read API | Apply ELO on game end (idempotent), serve rank + top-N |
+| Service            | Statefulness                 | Responsibility                                                                    |
+| ------------------ | ---------------------------- | --------------------------------------------------------------------------------- |
+| **API Gateway**    | stateless                    | Auth (JWT), REST for matchmaking + leaderboard, holds the matchmaking long-poll   |
+| **Matchmaker**     | stateless workers            | Find + atomically claim compatible opponents from the Redis pool, create Games    |
+| **Session Router** | stateless                    | Map `gameId → game server` via consistent hashing over live membership            |
+| **Game Server**    | **stateful (in-memory)**     | Own the authoritative board + clocks, validate moves, broadcast, persist move log |
+| **Leaderboard**    | stateless workers + read API | Apply ELO on game end (idempotent), serve rank + top-N                            |
 
 ## Data stores
 
@@ -120,11 +120,12 @@ the server running it. Validating a move is a local, in-memory operation, well
 inside the 200 ms budget. We still append every move to a durable log, but that
 write is for recovery, not for serving the next move.
 
-We rejected *stateless servers + shared store* because it puts a network
+We rejected _stateless servers + shared store_ because it puts a network
 read+write on the hot path of every move to avoid holding state that is genuinely
 cheap to hold. (Full trade-off in [LLD](02-lld.md#why-stateful-game-servers).)
 
 This buys two obligations we solve in the deep dive:
+
 1. both players must land on the same server → **consistent-hash session router**;
 2. a crash loses in-flight games → **recovery via move-log replay + generation fence**.
 
@@ -190,7 +191,7 @@ column and the Redis set are just idempotent, rebuildable views over it.
 ## Bottlenecks → deep dives
 
 The high-level design works. The [LLD](02-lld.md) then digs into the four things
-that make it *production-grade at scale*:
+that make it _production-grade at scale_:
 
 1. **Fair matchmaking at scale** — race-free atomic claim + widening windows.
 2. **Scaling stateful game servers to 500K games** — consistent-hash routing,

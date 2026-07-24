@@ -8,5 +8,8 @@ export default defineConfig({
   platform: 'node',
   clean: true,
   sourcemap: true,
+  // Bundle only our own workspace code; leave third-party deps (pino, fastify) external so their
+  // dynamic requires / worker threads keep working at runtime.
   noExternal: [/^@chess\//],
+  skipNodeModulesBundle: true,
 });

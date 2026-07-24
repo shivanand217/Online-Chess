@@ -21,15 +21,15 @@ target with more replicas.
 
 Read in order — each builds on the last.
 
-| # | Doc | What it covers |
-|---|-----|----------------|
-| 00 | [Requirements & Capacity](docs/00-requirements.md) | Functional / non-functional requirements, scale math, capacity estimates |
-| 01 | [High-Level Design](docs/01-hld.md) | Services, data flows, the three core requirement paths, architecture diagram |
-| 02 | [Low-Level Design](docs/02-lld.md) | Schemas, API + WebSocket protocol, matchmaking claim, consistent-hash routing, fencing, latency compensation, leaderboard rank |
-| 03 | [Tech Stack](docs/03-tech-stack.md) | Every technology decision with rationale and the alternative we rejected |
-| 04 | [Project Plan (Phases)](docs/04-project-plan.md) | **The roadmap.** Phase 0–8 with deliverables and acceptance criteria |
-| 05 | [Observability & SLOs](docs/05-observability.md) | Metrics, traces, logs, dashboards, alerting, SLOs |
-| 06 | [Deployment (GCP / K8s)](docs/06-deployment.md) | Terraform, GKE, Cloud SQL, Memorystore, Helm, CI/CD, autoscaling |
+| #   | Doc                                                | What it covers                                                                                                                 |
+| --- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 00  | [Requirements & Capacity](docs/00-requirements.md) | Functional / non-functional requirements, scale math, capacity estimates                                                       |
+| 01  | [High-Level Design](docs/01-hld.md)                | Services, data flows, the three core requirement paths, architecture diagram                                                   |
+| 02  | [Low-Level Design](docs/02-lld.md)                 | Schemas, API + WebSocket protocol, matchmaking claim, consistent-hash routing, fencing, latency compensation, leaderboard rank |
+| 03  | [Tech Stack](docs/03-tech-stack.md)                | Every technology decision with rationale and the alternative we rejected                                                       |
+| 04  | [Project Plan (Phases)](docs/04-project-plan.md)   | **The roadmap.** Phase 0–8 with deliverables and acceptance criteria                                                           |
+| 05  | [Observability & SLOs](docs/05-observability.md)   | Metrics, traces, logs, dashboards, alerting, SLOs                                                                              |
+| 06  | [Deployment (GCP / K8s)](docs/06-deployment.md)    | Terraform, GKE, Cloud SQL, Memorystore, Helm, CI/CD, autoscaling                                                               |
 
 ---
 
