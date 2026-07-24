@@ -8,8 +8,10 @@ export default defineConfig({
   platform: 'node',
   clean: true,
   sourcemap: true,
-  // Bundle only our own workspace code; leave third-party deps (pino, fastify) external so their
-  // dynamic requires / worker threads keep working at runtime.
-  noExternal: [/^@chess\//],
-  skipNodeModulesBundle: true,
+  // Produce a fully self-contained bundle (workspace + third-party) so the runtime image needs no
+  // node_modules at all. The banner shims `require` because bundled CJS deps (pino) call it at runtime.
+  noExternal: [/.*/],
+  banner: {
+    js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
+  },
 });
