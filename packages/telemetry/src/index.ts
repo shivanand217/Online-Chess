@@ -1,11 +1,15 @@
 // Observability primitives every service reuses: structured logger, health/readiness/metrics endpoints,
 // and signal-driven graceful shutdown. Prometheus/OpenTelemetry get wired here in Phase 5. Hand-written.
 import { pino, type Logger } from 'pino';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 
 export type { Logger };
 
-/** Create a named structured (JSON) logger at the given level. */
+/**
+ * Create a named structured (JSON) logger for non-HTTP contexts (background workers, scripts).
+ * Fastify services should instead pass `{ logger: { name, level } }` to the Fastify factory, which
+ * builds an equivalent pino logger internally and exposes it as `app.log`.
+ */
 export function createLogger(name: string, level = 'info'): Logger {
   return pino({ name, level });
 }
@@ -35,7 +39,7 @@ export function registerObservability(app: FastifyInstance, opts: ObservabilityO
 }
 
 /** Close the Fastify app cleanly on SIGTERM/SIGINT so rolling deploys drop no traffic. */
-export function installGracefulShutdown(app: FastifyInstance, log: Logger): void {
+export function installGracefulShutdown(app: FastifyInstance, log: FastifyBaseLogger): void {
   let closing = false;
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     if (closing) return;
