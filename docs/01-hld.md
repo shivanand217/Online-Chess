@@ -85,18 +85,19 @@ sequenceDiagram
   participant GW as Gateway
   participant MM as Matchmaker
   participant R as Redis
+  participant PG as Postgres
 
   B->>GW: POST /matchmaking {timeControl} (long-poll held)
-  GW->>R: ZADD mm:blitz <ratingB> reqB ; HSET fields
+  GW->>R: ZADD mm:blitz {ratingB} reqB, then HSET fields
   Note over R: B waits in the pool
   A->>GW: POST /matchmaking {timeControl} (long-poll held)
   GW->>MM: enqueue reqA
-  MM->>R: ZRANGEBYSCORE (window around A) → finds reqB
-  MM->>R: ZREM mm:blitz reqB  (returns 1 = claimed)
+  MM->>R: ZRANGEBYSCORE (window around A) finds reqB
+  MM->>R: ZREM mm:blitz reqB (returns 1 = claimed)
   MM->>PG: create Game(A,B)
-  MM->>R: PUBLISH match:reqB {gameId} ; return gameId for reqA
+  MM->>R: PUBLISH match:reqB {gameId}, return gameId for reqA
   GW-->>A: 200 {gameId}
-  GW-->>B: 200 {gameId}  (long-poll completes via pub/sub)
+  GW-->>B: 200 {gameId} (long-poll completes via pub/sub)
 ```
 
 - `playerId` and rating come from the **auth token / Player record**, never the
@@ -141,7 +142,7 @@ sequenceDiagram
   M->>GS: sendMove {from,to,moveNumber}
   GS->>GS: validate vs in-memory board + is it your turn?
   alt legal
-    GS->>GS: apply move; stop mover clock, start opponent clock
+    GS->>GS: apply move, stop mover clock, start opponent clock
     GS->>PG: append move (durable) — BEFORE broadcast
     GS-->>M: moveAck {accepted, whiteMs, blackMs}
     GS-->>O: opponentMove {from,to, whiteMs, blackMs}
