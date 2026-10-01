@@ -2,6 +2,7 @@
 // usable, and — the important invariant — the generation guard rejects a stale (zombie) write. Requires a
 // running Docker daemon; the container is started once for the whole file.
 import { randomUUID } from 'node:crypto';
+import { like } from 'drizzle-orm';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, type DbHandle } from './client.js';
@@ -14,6 +15,8 @@ import {
   insertPlayer,
   takeOwnership,
 } from './repositories.js';
+import { seedPlayers } from './seed.js';
+import { players } from './schema.js';
 import type { Game } from './schema.js';
 
 let container: StartedPostgreSqlContainer;
@@ -117,5 +120,18 @@ describe('appendMove — generation-guarded write', () => {
     const log = await getMoves(handle.db, game.gameId);
     expect(log.map((m) => m.ply)).toEqual([0, 1, 2]);
     expect(log.map((m) => m.uci)).toEqual(seq);
+  });
+});
+
+describe('seedPlayers', () => {
+  const seededCount = (): Promise<number> =>
+    handle.db.$count(players, like(players.username, 'player_%'));
+
+  it('bulk-inserts a seed cohort and is idempotent on re-run', async () => {
+    await seedPlayers(handle.db, 250);
+    expect(await seededCount()).toBe(250);
+    // Re-running seeds the same usernames → onConflictDoNothing keeps the count stable.
+    await seedPlayers(handle.db, 250);
+    expect(await seededCount()).toBe(250);
   });
 });
