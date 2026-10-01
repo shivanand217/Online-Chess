@@ -1,4 +1,4 @@
-// TypeScript config for @chess/domain; extends the workspace base. Hand-written.
+// TypeScript config for @chess/domain; extends the workspace base.
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
