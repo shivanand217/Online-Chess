@@ -1,6 +1,5 @@
-// Integration tests against a real Postgres via Testcontainers. Proves migrations apply, the schema is
-// usable, and — the important invariant — the generation guard rejects a stale (zombie) write. Requires a
-// running Docker daemon; the container is started once for the whole file.
+// Integration tests against a real Postgres via Testcontainers. The important invariant proved here is
+// that `appendMove` rejects a stale-generation (zombie) write. Needs Docker; one container per file.
 import { randomUUID } from 'node:crypto';
 import { like } from 'drizzle-orm';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
@@ -33,7 +32,6 @@ afterAll(async () => {
   await container?.stop();
 });
 
-/** Seed two fresh players and an active game between them. */
 async function seedGame(): Promise<Game> {
   const white = await insertPlayer(handle.db, { username: `w-${randomUUID()}` });
   const black = await insertPlayer(handle.db, { username: `b-${randomUUID()}` });
@@ -82,11 +80,11 @@ describe('appendMove — generation-guarded write', () => {
   it('rejects a stale-generation (zombie) write and mutates nothing', async () => {
     const game = await seedGame();
 
-    // A replacement server takes over → generation becomes 1.
+    // A replacement owner takes the game → generation is now 1.
     const owned = await takeOwnership(handle.db, game.gameId);
     expect(owned?.generation).toBe(1);
 
-    // The old owner (zombie) still believes it holds generation 0.
+    // The old owner still believes it holds generation 0.
     const applied = await appendMove(handle.db, {
       gameId: game.gameId,
       expectedGeneration: 0,
@@ -99,8 +97,8 @@ describe('appendMove — generation-guarded write', () => {
     expect(applied).toBe(false);
     expect(await getMoves(handle.db, game.gameId)).toHaveLength(0);
     const after = await getGame(handle.db, game.gameId);
-    expect(after?.whiteMs).toBe(180_000); // unchanged
-    expect(after?.turn).toBe('w'); // unchanged
+    expect(after?.whiteMs).toBe(180_000);
+    expect(after?.turn).toBe('w');
   });
 
   it('keeps the move log ordered by ply for replay', async () => {
@@ -130,7 +128,7 @@ describe('seedPlayers', () => {
   it('bulk-inserts a seed cohort and is idempotent on re-run', async () => {
     await seedPlayers(handle.db, 250);
     expect(await seededCount()).toBe(250);
-    // Re-running seeds the same usernames → onConflictDoNothing keeps the count stable.
+    // Re-running seeds the same usernames → onConflictDoNothing holds the count steady.
     await seedPlayers(handle.db, 250);
     expect(await seededCount()).toBe(250);
   });

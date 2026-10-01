@@ -1,7 +1,5 @@
-// Integration tests for the matchmaker core (pool + atomic claim) against a real Redis via Testcontainers.
-// The important invariant is Phase 2's acceptance criterion: N workers hammering a hot mid-band waiter →
-// the player is booked into *exactly one* game, with no double-booking. We prove it by racing many
-// concurrent claim attempts against a single waiter and asserting the winner count is 1.
+// Integration tests against a real Redis via Testcontainers. The concurrency test is the one that
+// matters: N workers racing against a single hot waiter must produce at most one winner.
 import { randomUUID } from 'node:crypto';
 import { GenericContainer, type StartedTestContainer } from 'testcontainers';
 import Redis from 'ioredis';
@@ -38,8 +36,8 @@ function waiter(overrides: Partial<WaiterMetadata> = {}): WaiterMetadata {
   };
 }
 
-describe('pool — enqueue/dequeue/getWaiter', () => {
-  it('round-trips a waiter: pool size grows, metadata is readable, dequeue reverses both', async () => {
+describe('pool', () => {
+  it('round-trips a waiter: enqueue populates the pool and metadata; dequeue reverses both', async () => {
     const w = waiter({ rating: 1700 });
     await enqueue(redis, w);
     expect(await poolSize(redis, w.timeControl)).toBe(1);
@@ -50,8 +48,8 @@ describe('pool — enqueue/dequeue/getWaiter', () => {
   });
 });
 
-describe('tryClaim — pairing', () => {
-  it('pairs two waiters inside the window and removes both from the pool', async () => {
+describe('tryClaim', () => {
+  it('pairs two waiters inside the window and removes both', async () => {
     const a = waiter({ rating: 1500 });
     const b = waiter({ rating: 1520 });
     await enqueue(redis, a);
@@ -68,7 +66,7 @@ describe('tryClaim — pairing', () => {
     expect(await poolSize(redis, a.timeControl)).toBe(0);
   });
 
-  it('returns null when no candidate sits inside the window', async () => {
+  it('returns null when nothing is in range (both waiters remain)', async () => {
     const a = waiter({ rating: 1500 });
     const far = waiter({ rating: 2500 });
     await enqueue(redis, a);
@@ -82,7 +80,6 @@ describe('tryClaim — pairing', () => {
     });
 
     expect(peer).toBeNull();
-    // Both still in pool for a later (wider) attempt.
     expect(await poolSize(redis, a.timeControl)).toBe(2);
   });
 
@@ -98,19 +95,14 @@ describe('tryClaim — pairing', () => {
     });
 
     expect(peer).toBeNull();
-    // The caller's own entry must stay in the pool so another worker can still match them.
     expect(await poolSize(redis, a.timeControl)).toBe(1);
   });
-});
 
-describe('tryClaim — concurrency (the race-free invariant)', () => {
-  it('with N workers claiming against one hot waiter, exactly one wins', async () => {
+  it('with N workers racing one hot waiter, no two callers claim the same peer', async () => {
     const hot = waiter({ rating: 1500 });
     await enqueue(redis, hot);
 
     const N = 50;
-    // Each contender is their own waiter inside the window — mirrors real traffic (every arrival both
-    // adds itself and attempts to claim).
     const contenders = Array.from({ length: N }, () => waiter({ rating: 1500 }));
     await Promise.all(contenders.map((c) => enqueue(redis, c)));
 
@@ -125,16 +117,11 @@ describe('tryClaim — concurrency (the race-free invariant)', () => {
       ),
     );
 
-    // Hot waiter is booked at most once (the single most important invariant).
-    const winnersOfHot = results.filter((r) => r === hot.requestId);
-    expect(winnersOfHot).toHaveLength(1);
+    expect(results.filter((r) => r === hot.requestId)).toHaveLength(1);
 
-    // Broader invariant: no requestId appears as a winner twice. Each successful ZREM in the Lua
-    // script returns 1 only once, so no two callers can ever have claimed the same peer.
     const winners = results.filter((r): r is string => r !== null);
     expect(new Set(winners).size).toBe(winners.length);
 
-    // Nobody paired with themselves.
     for (let i = 0; i < contenders.length; i++) {
       expect(results[i]).not.toBe(contenders[i]?.requestId);
     }

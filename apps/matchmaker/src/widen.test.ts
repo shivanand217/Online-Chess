@@ -7,16 +7,14 @@ describe('windowFor', () => {
   });
 
   it('grows linearly with wait time', () => {
-    // 2s × 25 pts/s + 50 initial = 100.
-    expect(windowFor(2_000)).toBe(100);
+    expect(windowFor(2_000)).toBe(100); // 50 + 2s * 25
   });
 
-  it('clamps at the configured maximum', () => {
-    // Far past the ramp — must saturate at maxWindow.
+  it('clamps at maxWindow', () => {
     expect(windowFor(10 * 60 * 1000)).toBe(DEFAULT_WIDEN.maxWindow);
   });
 
-  it('treats negative wait (clock skew) as zero', () => {
+  it('treats negative wait as zero (clock skew defence)', () => {
     expect(windowFor(-5_000)).toBe(DEFAULT_WIDEN.initialWindow);
   });
 

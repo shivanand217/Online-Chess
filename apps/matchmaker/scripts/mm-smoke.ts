@@ -1,13 +1,6 @@
-// Manual smoke test for the matchmaker core against a *live* Redis (your `pnpm stack:up` instance by
-// default). Enqueues a hot waiter + N contenders at nearby ratings, has them all run `tryClaim` in
-// parallel, and prints the pairing graph plus a verdict on the three invariants:
-//   - the hot waiter is booked at most once (no double-booking),
-//   - no requestId appears as a winner twice (no shared peer),
-//   - nobody paired with themselves.
-//
-// This is the same shape as the integration test but hits your live stack, so you can watch keys appear
-// in redis-cli while it runs. Not part of the test suite — invoke with `pnpm --filter @chess/matchmaker smoke`.
-// Hand-written.
+// Manual smoke against a live Redis (defaults to `pnpm stack:up`'s instance). Enqueues a hot waiter plus
+// N contenders, races them through `tryClaim` in parallel, prints the pairing graph, and verifies the
+// three invariants. Invoke with `pnpm --filter @chess/matchmaker smoke`.
 import { randomUUID } from 'node:crypto';
 import Redis from 'ioredis';
 import { registerClaimScript, tryClaim } from '../src/claim.js';
@@ -31,17 +24,13 @@ function waiter(rating: number): WaiterMetadata {
   };
 }
 
-/** Short label for a long UUID — just the first chunk, enough to eyeball distinct rows. */
 const short = (id: string): string => id.slice(0, 8);
 
 async function main(): Promise<void> {
   const redis = new Redis(REDIS_URL);
   registerClaimScript(redis);
 
-  // Flush just this pool so re-runs don't pile up stale entries. We ZREMRANGEBYRANK the lot instead of
-  // flushall, so the user's other keys (e.g. leaderboard sorted set once Phase 4 lands) are untouched.
-  const key = poolKey(TIME_CONTROL);
-  await redis.del(key);
+  await redis.del(poolKey(TIME_CONTROL));
 
   console.log(
     `\n→ matchmaker smoke: ${CONTENDERS + 1} waiters on ${TIME_CONTROL}, ±${WINDOW} window`,
@@ -52,17 +41,14 @@ async function main(): Promise<void> {
   await enqueue(redis, hot);
   console.log(`  hot waiter: ${short(hot.requestId)} @ rating ${hot.rating}`);
 
-  // Contenders spread uniformly around the hot waiter so most sit inside the window.
   const contenders = Array.from({ length: CONTENDERS }, (_, i) => {
     const offset = Math.round((i / Math.max(1, CONTENDERS - 1) - 0.5) * 2 * SPREAD);
     return waiter(HOT_RATING + offset);
   });
   await Promise.all(contenders.map((c) => enqueue(redis, c)));
 
-  const sizeBefore = await poolSize(redis, TIME_CONTROL);
-  console.log(`  pool before: ${sizeBefore} members\n`);
+  console.log(`  pool before: ${await poolSize(redis, TIME_CONTROL)} members\n`);
 
-  // The race.
   const t0 = Date.now();
   const results = await Promise.all(
     contenders.map((c) =>
@@ -76,7 +62,6 @@ async function main(): Promise<void> {
   );
   const elapsed = Date.now() - t0;
 
-  // Per-caller outcomes.
   console.log('  pairings:');
   for (let i = 0; i < contenders.length; i++) {
     const caller = contenders[i];
@@ -87,14 +72,12 @@ async function main(): Promise<void> {
     console.log(`    ${short(caller.requestId)} @${caller.rating}  →  ${peerLabel}`);
   }
 
-  // Invariants.
   const winners = results.filter((r): r is string => r !== null);
   const winnersOfHot = winners.filter((w) => w === hot.requestId);
   const duplicates = winners.length - new Set(winners).size;
   const selfMatches = contenders.filter((c, i) => results[i] === c.requestId).length;
 
-  const sizeAfter = await poolSize(redis, TIME_CONTROL);
-  console.log(`\n  pool after:  ${sizeAfter} members`);
+  console.log(`\n  pool after:  ${await poolSize(redis, TIME_CONTROL)} members`);
   console.log(`  pairings:    ${winners.length} / ${contenders.length}`);
   console.log(`  elapsed:     ${elapsed} ms`);
 
