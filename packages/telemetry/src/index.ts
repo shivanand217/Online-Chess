@@ -1,25 +1,20 @@
 // Observability primitives every service reuses: structured logger, health/readiness/metrics endpoints,
-// and signal-driven graceful shutdown. Prometheus/OpenTelemetry get wired here in Phase 5. Hand-written.
+// and signal-driven graceful shutdown. Prometheus/OpenTelemetry wiring lands here later.
 import { pino, type Logger } from 'pino';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 
 export type { Logger };
 
-/**
- * Create a named structured (JSON) logger for non-HTTP contexts (background workers, scripts).
- * Fastify services should instead pass `{ logger: { name, level } }` to the Fastify factory, which
- * builds an equivalent pino logger internally and exposes it as `app.log`.
- */
+/** Named structured logger for non-HTTP contexts (background workers, scripts). */
 export function createLogger(name: string, level = 'info'): Logger {
   return pino({ name, level });
 }
 
 export interface ObservabilityOptions {
-  /** Optional readiness check; when it returns false, /readyz responds 503. */
+  /** Optional readiness check; false → /readyz responds 503. */
   ready?: () => boolean | Promise<boolean>;
 }
 
-/** Register /healthz (liveness), /readyz (readiness) and a placeholder /metrics on a Fastify app. */
 export function registerObservability(app: FastifyInstance, opts: ObservabilityOptions = {}): void {
   app.get('/healthz', async () => ({ status: 'ok' }));
 
@@ -34,7 +29,7 @@ export function registerObservability(app: FastifyInstance, opts: ObservabilityO
 
   app.get('/metrics', async (_req, reply) => {
     reply.header('content-type', 'text/plain; version=0.0.4');
-    return '# Prometheus metrics are wired in Phase 5 (see docs/05-observability.md)\n';
+    return '# metrics not yet wired (see docs/05-observability.md)\n';
   });
 }
 
