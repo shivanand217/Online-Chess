@@ -86,6 +86,12 @@ importers:
       '@chess/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@chess/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@chess/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@chess/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -102,6 +108,9 @@ importers:
         specifier: ^5.4.2
         version: 5.11.1
     devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^10.16.0
+        version: 10.28.0
       testcontainers:
         specifier: ^10.16.0
         version: 10.28.0

@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@chess/config": "workspace:*",
+    "@chess/db": "workspace:*",
+    "@chess/domain": "workspace:*",
     "@chess/protocol": "workspace:*",
     "@chess/redis": "workspace:*",
     "@chess/telemetry": "workspace:*",
@@ -21,6 +23,7 @@
     "ioredis": "^5.4.2"
   },
   "devDependencies": {
+    "@testcontainers/postgresql": "^10.16.0",
     "testcontainers": "^10.16.0"
   }
 }
