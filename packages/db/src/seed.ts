@@ -1,6 +1,6 @@
-// Seed script: generate players with a realistic (roughly normal) rating distribution so matchmaking and
-// the leaderboard have lifelike data to work against. Idempotent — re-running skips usernames that already
-// exist. Run with `pnpm --filter @chess/db db:seed` (honours DATABASE_URL and SEED_COUNT). Hand-written.
+// Generate players with a roughly normal rating distribution so matchmaking and the leaderboard have
+// lifelike data. Idempotent — re-running skips usernames that already exist.
+// Run with `pnpm --filter @chess/db db:seed` (honours DATABASE_URL and SEED_COUNT).
 import { pathToFileURL } from 'node:url';
 import { createDb, type Database } from './client.js';
 import { players } from './schema.js';
@@ -10,13 +10,12 @@ const RATING_SD = 300;
 const MIN_RATING = 400;
 const MAX_RATING = 2800;
 
-/** A generated seed player. Structurally a subset of `NewPlayer`, so it inserts directly. */
 export interface SeedPlayer {
   username: string;
   rating: number;
 }
 
-/** One standard-normal sample via the Box–Muller transform. */
+/** Standard-normal sample via Box–Muller. */
 function standardNormal(): number {
   let u = 0;
   let v = 0;
@@ -25,10 +24,6 @@ function standardNormal(): number {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-/**
- * Generate `count` players with sequential usernames (`player_000000`…) and ratings drawn from a normal
- * distribution centred on 1500, clamped to a sane band. `startIndex` lets callers extend an existing set.
- */
 export function makePlayers(count: number, startIndex = 0): SeedPlayer[] {
   return Array.from({ length: count }, (_, i) => {
     const rating = Math.round(MEAN_RATING + RATING_SD * standardNormal());
@@ -39,7 +34,6 @@ export function makePlayers(count: number, startIndex = 0): SeedPlayer[] {
   });
 }
 
-/** Insert `count` seed players in chunks, skipping any whose username already exists. */
 export async function seedPlayers(db: Database, count: number, chunkSize = 1000): Promise<number> {
   const rows = makePlayers(count);
   for (let i = 0; i < rows.length; i += chunkSize) {
@@ -63,7 +57,7 @@ async function main(): Promise<void> {
   }
 }
 
-// Run only when executed directly (tsx src/seed.ts), not when imported by tests.
+// Only run when executed directly (tsx src/seed.ts), not when imported by tests.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err: unknown) => {
     console.error(err);

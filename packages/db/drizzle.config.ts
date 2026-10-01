@@ -1,7 +1,6 @@
-// drizzle-kit configuration: where the schema lives, where generated SQL migrations go, and how to reach
-// Postgres for `db:migrate`. `db:generate` (schema → SQL) needs no database. Hand-written.
 import { defineConfig } from 'drizzle-kit';
 
+// `db:generate` reads schema → SQL (needs no DB); `db:migrate` applies it against DATABASE_URL.
 export default defineConfig({
   dialect: 'postgresql',
   schema: './src/schema.ts',
