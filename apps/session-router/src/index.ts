@@ -1,5 +1,5 @@
-// Session Router entrypoint. Phase 0: health/readiness/metrics only.
-// Phase 3 adds the consistent-hash ring built from etcd membership that pins both players to one game server. Hand-written.
+// Session router: maps gameId to the game-server owning it, via a consistent-hash ring built from
+// ephemeral etcd membership so both players land on the same server.
 import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { registerObservability, installGracefulShutdown } from '@chess/telemetry';

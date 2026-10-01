@@ -1,5 +1,4 @@
-// Leaderboard service entrypoint. Phase 0: health/readiness/metrics only.
-// Phase 4 adds the idempotent ELO apply (keyed by gameId), Redis sorted-set rank, and reconciliation. Hand-written.
+// Leaderboard service: idempotent ELO apply on game end + rank/top-N reads over a Redis sorted set.
 import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { registerObservability, installGracefulShutdown } from '@chess/telemetry';

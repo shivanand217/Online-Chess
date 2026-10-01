@@ -1,5 +1,4 @@
-// Matchmaker worker entrypoint. Phase 0: health/readiness/metrics only.
-// Phase 2 adds the Redis sorted-set pool, widening-window search, and the atomic ZREM claim. Hand-written.
+// Matchmaker worker: finds and atomically claims opponents from the Redis pool.
 import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { registerObservability, installGracefulShutdown } from '@chess/telemetry';

@@ -1,6 +1,5 @@
-// Game Server entrypoint — the stateful heart of the platform. Phase 0: health/readiness/metrics only.
-// Phase 3 adds the WebSocket layer, in-memory board/clocks, move validation, persist-before-broadcast,
-// crash recovery via replay, generation fencing, and latency compensation. Hand-written.
+// Game server: the stateful heart. Owns live games in memory (board + both clocks) and talks to clients
+// over WebSockets, persisting each move before broadcasting it.
 import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { registerObservability, installGracefulShutdown } from '@chess/telemetry';

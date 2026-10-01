@@ -1,5 +1,4 @@
-// API Gateway entrypoint. Phase 0: a Fastify server exposing only health/readiness/metrics.
-// REST routes (matchmaking long-poll in Phase 2, leaderboard reads in Phase 4) are added later. Hand-written.
+// API gateway: REST edge for the client (auth, matchmaking long-poll, leaderboard reads).
 import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { registerObservability, installGracefulShutdown } from '@chess/telemetry';
