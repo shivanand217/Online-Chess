@@ -1,6 +1,7 @@
-// tsup bundler config: bundles this app + its @chess/* workspace deps into dist/ for production images. Hand-written.
 import { defineConfig } from 'tsup';
 
+// Bundle the app + its workspace deps into a self-contained ESM file so the runtime image needs no
+// node_modules. The banner shims `require` because some bundled CJS deps (pino) call it at runtime.
 export default defineConfig({
   entry: ['src/index.ts'],
   format: ['esm'],
@@ -8,8 +9,6 @@ export default defineConfig({
   platform: 'node',
   clean: true,
   sourcemap: true,
-  // Produce a fully self-contained bundle (workspace + third-party) so the runtime image needs no
-  // node_modules at all. The banner shims `require` because bundled CJS deps (pino) call it at runtime.
   noExternal: [/.*/],
   banner: {
     js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
