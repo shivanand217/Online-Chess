@@ -10,6 +10,40 @@ export type TimeControl = z.infer<typeof TimeControl>;
 export const MatchmakingRequest = z.object({ timeControl: TimeControl });
 export type MatchmakingRequest = z.infer<typeof MatchmakingRequest>;
 
+/**
+ * The gateway's response to a successful long-poll match. Includes which colour the caller plays so the
+ * client can bootstrap the UI without a second round-trip. Expired/cancelled polls return a 408 instead.
+ */
+export const MatchmakingResponse = z.object({
+  gameId: z.string().uuid(),
+  color: z.enum(['w', 'b']),
+  opponent: z.object({
+    playerId: z.string().uuid(),
+    username: z.string(),
+    rating: z.number().int(),
+  }),
+  timeControl: TimeControl,
+});
+export type MatchmakingResponse = z.infer<typeof MatchmakingResponse>;
+
+/**
+ * Payload published on `match:<requestId>` when the matchmaker pairs a waiter. The gateway subscribes
+ * before enqueueing (no race) and relays the body to the held long-poll. The two requests on the same
+ * pairing receive messages that mirror each other with the colour flipped.
+ */
+export const MatchNotification = z.object({
+  requestId: z.string().uuid(),
+  gameId: z.string().uuid(),
+  color: z.enum(['w', 'b']),
+  opponent: z.object({
+    playerId: z.string().uuid(),
+    username: z.string(),
+    rating: z.number().int(),
+  }),
+  timeControl: TimeControl,
+});
+export type MatchNotification = z.infer<typeof MatchNotification>;
+
 // --- WebSocket: client -> server ---
 export const SendMove = z.object({
   type: z.literal('sendMove'),

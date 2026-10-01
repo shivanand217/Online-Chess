@@ -1,20 +1,26 @@
 {
-  "//": "Matchmaker worker: finds + atomically claims opponents from the Redis pool. Phase 0 = health only. Hand-written.",
+  "//": "Matchmaker worker: finds + atomically claims opponents from the Redis pool. Phase 2 adds the sorted-set pool, Lua ZREM claim, and widening-window search. Hand-written.",
   "name": "@chess/matchmaker",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsup",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "smoke": "tsx scripts/mm-smoke.ts"
   },
   "dependencies": {
     "@chess/config": "workspace:*",
+    "@chess/protocol": "workspace:*",
+    "@chess/redis": "workspace:*",
     "@chess/telemetry": "workspace:*",
-    "fastify": "^5.2.0"
+    "fastify": "^5.2.0",
+    "ioredis": "^5.4.2"
+  },
+  "devDependencies": {
+    "testcontainers": "^10.16.0"
   }
 }
