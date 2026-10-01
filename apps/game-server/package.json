@@ -1,5 +1,5 @@
 {
-  "//": "Game Server: stateful, in-memory authoritative gameplay over WebSockets (ws). Phase 0 = health only. Hand-written.",
+  "//": "Game server: stateful, in-memory gameplay over WebSockets (ws).",
   "name": "@chess/game-server",
   "version": "0.0.0",
   "private": true,

@@ -1,5 +1,5 @@
 {
-  "//": "Typed environment/config loader (zod) shared by every service. Hand-written.",
+  "//": "Typed environment/config loader (zod) shared by every service.",
   "name": "@chess/config",
   "version": "0.0.0",
   "private": true,

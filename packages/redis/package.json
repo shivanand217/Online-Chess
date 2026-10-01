@@ -1,5 +1,5 @@
 {
-  "//": "Shared Redis (ioredis) client factory; home for Lua scripts (matchmaking claim) added in Phase 2. Hand-written.",
+  "//": "Shared ioredis client factory and the Lua-script registration helper.",
   "name": "@chess/redis",
   "version": "0.0.0",
   "private": true,

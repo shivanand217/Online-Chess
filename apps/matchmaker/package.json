@@ -1,5 +1,5 @@
 {
-  "//": "Matchmaker worker: finds + atomically claims opponents from the Redis pool. Phase 2 adds the sorted-set pool, Lua ZREM claim, and widening-window search. Hand-written.",
+  "//": "Matchmaker: Redis sorted-set pool + Lua atomic claim + widening-window search.",
   "name": "@chess/matchmaker",
   "version": "0.0.0",
   "private": true,

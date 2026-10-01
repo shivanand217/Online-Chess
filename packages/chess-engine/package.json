@@ -1,5 +1,5 @@
 {
-  "//": "Chess rules wrapper over chess.js: legal-move validation, terminal detection, FEN, move replay. Hand-written.",
+  "//": "Chess rules wrapper over chess.js: legal-move validation, terminal detection, FEN, move replay.",
   "name": "@chess/chess-engine",
   "version": "0.0.0",
   "private": true,

@@ -1,5 +1,5 @@
 {
-  "//": "Pure domain types + game math (ELO). No I/O, fully unit-testable. Hand-written.",
+  "//": "Pure domain types + game math (ELO). No I/O, fully unit-testable.",
   "name": "@chess/domain",
   "version": "0.0.0",
   "private": true,

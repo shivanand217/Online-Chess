@@ -1,5 +1,5 @@
 {
-  "//": "Leaderboard service: idempotent ELO apply + rank/top-N reads (Redis sorted set). Phase 0 = health only. Hand-written.",
+  "//": "Leaderboard: idempotent ELO apply on game end + rank/top-N reads (Redis sorted set).",
   "name": "@chess/leaderboard",
   "version": "0.0.0",
   "private": true,

@@ -1,5 +1,5 @@
 {
-  "//": "Shared wire contracts (REST DTOs + WebSocket message schemas) as zod, used by client and server. Hand-written.",
+  "//": "Shared wire contracts (REST DTOs + WebSocket message schemas) as zod, used by client and server.",
   "name": "@chess/protocol",
   "version": "0.0.0",
   "private": true,

@@ -1,5 +1,5 @@
 {
-  "//": "Session Router: maps gameId -> game server via consistent hashing over etcd membership. Phase 0 = health only. Hand-written.",
+  "//": "Session router: maps gameId to its game server via consistent hashing over etcd membership.",
   "name": "@chess/session-router",
   "version": "0.0.0",
   "private": true,

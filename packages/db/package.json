@@ -1,5 +1,5 @@
 {
-  "//": "Postgres access layer (Drizzle over node-postgres): schema, drizzle-kit migrations, pooled connection, and the generation-guarded move+clock write. Hand-written.",
+  "//": "Postgres access layer (Drizzle over node-postgres): schema, drizzle-kit migrations, pooled connection, and the generation-guarded move+clock write.",
   "name": "@chess/db",
   "version": "0.0.0",
   "private": true,
