@@ -6,10 +6,12 @@ import type { FastifyInstance } from 'fastify';
 import { MatchmakingRequest, type MatchmakingResponse } from '@chess/protocol';
 import type { MatchSubscriber } from '../match-subscriber.js';
 import type { MatchmakerClient } from '../matchmaker-client.js';
+import type { RouterClient } from '../router-client.js';
 
 export interface MatchmakingDeps {
   subscriber: MatchSubscriber;
   matchmaker: MatchmakerClient;
+  router: RouterClient;
   /** Max time the gateway holds the connection before giving up with 408. */
   timeoutMs?: number;
 }
@@ -54,11 +56,13 @@ export function registerMatchmakingRoute(app: FastifyInstance, deps: Matchmaking
       return { error: 'match_timeout' };
     }
 
+    const route = await deps.router.routeFor(result.gameId);
     const response: MatchmakingResponse = {
       gameId: result.gameId,
       color: result.color,
       opponent: result.opponent,
       timeControl: result.timeControl,
+      ...(route ? { wsUrl: route.wsUrl } : {}),
     };
     return response;
   });

@@ -23,6 +23,8 @@
   },
   "devDependencies": {
     "@chess/matchmaker": "workspace:*",
+    "@chess/registry": "workspace:*",
+    "@chess/session-router": "workspace:*",
     "@testcontainers/postgresql": "^10.16.0",
     "testcontainers": "^10.16.0"
   }

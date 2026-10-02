@@ -5,6 +5,7 @@ import { createDb } from '@chess/db';
 import { installGracefulShutdown, registerObservability } from '@chess/telemetry';
 import { createMatchSubscriber } from './match-subscriber.js';
 import { createMatchmakerClient } from './matchmaker-client.js';
+import { createRouterClient } from './router-client.js';
 import { registerGamesRoute } from './routes/games.js';
 import { registerMatchmakingRoute } from './routes/matchmaking.js';
 
@@ -17,6 +18,7 @@ registerObservability(app);
 const db = createDb(config.DATABASE_URL);
 const subscriber = await createMatchSubscriber(config.REDIS_URL);
 const matchmaker = createMatchmakerClient(config.MATCHMAKER_URL);
+const router = createRouterClient(config.SESSION_ROUTER_URL);
 
 app.addHook('onClose', async () => {
   await subscriber.stop();
@@ -24,8 +26,8 @@ app.addHook('onClose', async () => {
 });
 installGracefulShutdown(app, app.log);
 
-registerMatchmakingRoute(app, { subscriber, matchmaker });
-registerGamesRoute(app, { db: db.db });
+registerMatchmakingRoute(app, { subscriber, matchmaker, router });
+registerGamesRoute(app, { db: db.db, router });
 
 app
   .listen({ port: config.GATEWAY_PORT, host: '0.0.0.0' })

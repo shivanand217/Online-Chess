@@ -112,6 +112,12 @@ importers:
       '@chess/matchmaker':
         specifier: workspace:*
         version: link:../matchmaker
+      '@chess/registry':
+        specifier: workspace:*
+        version: link:../../packages/registry
+      '@chess/session-router':
+        specifier: workspace:*
+        version: link:../session-router
       '@testcontainers/postgresql':
         specifier: ^10.16.0
         version: 10.28.0
