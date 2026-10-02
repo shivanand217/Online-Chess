@@ -11,6 +11,20 @@ export type TimeControl = z.infer<typeof TimeControl>;
 export const MatchmakingRequest = z.object({ timeControl: TimeControl });
 export type MatchmakingRequest = z.infer<typeof MatchmakingRequest>;
 
+/** Gateway → matchmaker RPC when the gateway holds a long-poll on behalf of a client. The gateway owns
+ *  the `requestId` so it can subscribe to the match channel before telling the matchmaker to enqueue. */
+export const EnqueueRequest = z.object({
+  requestId: z.string().uuid(),
+  playerId: z.string().uuid(),
+  timeControl: TimeControl,
+});
+export type EnqueueRequest = z.infer<typeof EnqueueRequest>;
+
+export const EnqueueResponse = z.object({
+  requestId: z.string().uuid(),
+});
+export type EnqueueResponse = z.infer<typeof EnqueueResponse>;
+
 export const MatchmakingResponse = z.object({
   gameId: z.string().uuid(),
   color: z.enum(['w', 'b']),
