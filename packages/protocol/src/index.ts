@@ -34,6 +34,9 @@ export const MatchmakingResponse = z.object({
     rating: z.number().int(),
   }),
   timeControl: TimeControl,
+  /** Game-server WebSocket URL from the session router. Absent if the router is empty / unreachable; the
+   *  client can retry via `GET /games/:id` once a server is up. */
+  wsUrl: z.string().url().optional(),
 });
 export type MatchmakingResponse = z.infer<typeof MatchmakingResponse>;
 
