@@ -18,6 +18,7 @@ const sessions = new SessionManager(db.db);
 const hub = new WsHub({ db: db.db, sessions });
 
 app.addHook('onClose', async () => {
+  hub.stop();
   await db.close();
 });
 installGracefulShutdown(app, app.log);

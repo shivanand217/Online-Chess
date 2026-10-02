@@ -6,8 +6,9 @@ import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { IllegalMoveError } from '@chess/chess-engine';
-import { appendMove, finishGame, type Database } from '@chess/db';
+import { appendMove, finishGame, getMoves, type Database } from '@chess/db';
 import { ClientMessage, type ServerMessage } from '@chess/protocol';
+import { FlagTimers } from './flag-timer.js';
 import type { EndReason, GameSession } from './session.js';
 import { TimeExpiredError } from './session.js';
 import type { SessionManager } from './sessions.js';
@@ -18,6 +19,12 @@ export interface WsDeps {
   sessions: SessionManager;
 }
 
+/** Return the current mover's remaining ms, used to schedule the flag timer. */
+function remainingForMover(session: GameSession): number {
+  const snap = session.snapshotClocks();
+  return session.turn === 'w' ? snap.whiteMs : snap.blackMs;
+}
+
 interface Peer {
   playerId: string;
   socket: WebSocket;
@@ -26,8 +33,14 @@ interface Peer {
 export class WsHub {
   /** gameId → playerId → peer */
   private readonly peers = new Map<string, Map<string, Peer>>();
+  private readonly flagTimers = new FlagTimers();
 
   constructor(private readonly deps: WsDeps) {}
+
+  /** Shut down any pending flag timers — called from the service's onClose hook. */
+  stop(): void {
+    this.flagTimers.cancelAll();
+  }
 
   /** Attach a WebSocket server to an existing HTTP server. Expects upgrades at /ws/games/:gameId with
    *  an `x-player-id` header; rejects everything else at the HTTP layer. */
@@ -86,17 +99,25 @@ export class WsHub {
     this.peers.set(session.gameId, slot);
 
     const color = session.colorOf(playerId);
-    if (color) send(ws, this.gameStateFor(session, color));
+    if (color) void this.sendGameState(session, playerId, color);
+
+    // First join for this session arms the flag timer; subsequent joins (reconnect) don't need to.
+    if (session.status === 'active' && slot.size === 1) {
+      this.armFlagTimer(session);
+    }
 
     ws.on('message', (data) => void this.onMessage(session, playerId, data.toString()));
     ws.on('close', () => this.onClose(session.gameId, playerId, ws));
   }
 
-  private gameStateFor(session: GameSession, color: 'w' | 'b'): ServerMessage {
+  private async sendGameState(
+    session: GameSession,
+    playerId: string,
+    color: 'w' | 'b',
+  ): Promise<void> {
     const clocks = session.snapshotClocks();
-    // The current FEN captures the position the client needs to render; the detailed per-move log is a
-    // separate REST concern (not needed for live play, only for replay UIs).
-    return {
+    const log = await getMoves(this.deps.db, session.gameId);
+    this.sendTo(session.gameId, playerId, {
       type: 'gameState',
       gameId: session.gameId,
       color,
@@ -104,9 +125,18 @@ export class WsHub {
       turn: session.turn,
       whiteMs: clocks.whiteMs,
       blackMs: clocks.blackMs,
-      moves: [],
+      moves: log.map((m) => ({ uci: m.uci, san: m.san })),
       status: session.status,
-    };
+    });
+  }
+
+  private armFlagTimer(session: GameSession): void {
+    this.flagTimers.schedule(session.gameId, remainingForMover(session), () => {
+      // The mover whose timer fired loses; whichever colour is on turn at the moment is the one that
+      // just ran out.
+      const loser = session.turn;
+      void this.endGame(session, loser === 'w' ? '0-1' : '1-0', 'flag');
+    });
   }
 
   private async onMessage(session: GameSession, playerId: string, raw: string): Promise<void> {
@@ -215,6 +245,9 @@ export class WsHub {
     const terminal = session.terminalFromEngine();
     if (terminal) {
       await this.endGame(session, terminal.result, terminal.reason);
+    } else {
+      // The mover changed — the new mover's clock starts counting now.
+      this.armFlagTimer(session);
     }
   }
 
@@ -229,6 +262,7 @@ export class WsHub {
   private async endGame(session: GameSession, result: Result, reason: EndReason): Promise<void> {
     if (session.status !== 'active') return;
     session.finish();
+    this.flagTimers.cancel(session.gameId);
     await finishGame(this.deps.db, {
       gameId: session.gameId,
       expectedGeneration: session.generation,
