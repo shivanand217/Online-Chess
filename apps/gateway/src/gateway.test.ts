@@ -3,11 +3,17 @@
 // colours. Also covers the 408 path and GET /games/:id.
 import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { GenericContainer, type StartedTestContainer } from 'testcontainers';
+import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import Redis from 'ioredis';
 import { createDb, getPlayer, insertPlayer, runMigrations, type DbHandle } from '@chess/db';
 import type { MatchmakingResponse } from '@chess/protocol';
+import { createRegistry, type RegistryClient } from '@chess/registry';
+import { HashRing, type RingNode } from '@chess/session-router/ring';
+import {
+  registerRoutes as registerRouterRoutes,
+  type RingHolder,
+} from '@chess/session-router/routes';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { registerClaimScript } from '@chess/matchmaker/claim';
 import { startSweeper, type Sweeper } from '@chess/matchmaker/loop';
@@ -15,23 +21,40 @@ import type { ResolvePlayer } from '@chess/matchmaker/notify';
 import { registerRoutes as registerMatchmakerRoutes } from '@chess/matchmaker/routes';
 import { createMatchSubscriber, type MatchSubscriber } from './match-subscriber.js';
 import { createMatchmakerClient } from './matchmaker-client.js';
+import { createRouterClient } from './router-client.js';
 import { registerGamesRoute } from './routes/games.js';
 import { registerMatchmakingRoute } from './routes/matchmaking.js';
 
+const FAKE_GAME_SERVER_URL = 'ws://game-server-fake:3003';
+const GAME_SERVERS_PREFIX = '/chess/game-servers/';
+
 let pg: StartedPostgreSqlContainer;
 let redisContainer: StartedTestContainer;
+let etcdContainer: StartedTestContainer;
 let db: DbHandle;
 let redis: Redis;
 let matchmakerApp: FastifyInstance;
+let routerApp: FastifyInstance;
 let gatewayApp: FastifyInstance;
 let gatewayUrl: string;
 let subscriber: MatchSubscriber;
 let sweeper: Sweeper | undefined;
+let registry: RegistryClient;
+let routerWatcher: RegistryClient;
 
 beforeAll(async () => {
-  [pg, redisContainer] = await Promise.all([
+  [pg, redisContainer, etcdContainer] = await Promise.all([
     new PostgreSqlContainer('postgres:16-alpine').start(),
     new GenericContainer('redis:7-alpine').withExposedPorts(6379).start(),
+    new GenericContainer('quay.io/coreos/etcd:v3.5.17')
+      .withCommand([
+        '/usr/local/bin/etcd',
+        '--listen-client-urls=http://0.0.0.0:2379',
+        '--advertise-client-urls=http://0.0.0.0:2379',
+      ])
+      .withExposedPorts(2379)
+      .withWaitStrategy(Wait.forLogMessage(/ready to serve client requests/))
+      .start(),
   ]);
   db = createDb(pg.getConnectionUri());
   await runMigrations(db.db);
@@ -40,6 +63,8 @@ beforeAll(async () => {
   const redisUrl = `redis://${redisHost}:${redisPort}`;
   redis = new Redis(redisUrl);
   registerClaimScript(redis);
+
+  const etcdUrl = `http://${etcdContainer.getHost()}:${etcdContainer.getMappedPort(2379)}`;
 
   const resolvePlayer: ResolvePlayer = async (playerId) => {
     const p = await getPlayer(db.db, playerId);
@@ -51,12 +76,34 @@ beforeAll(async () => {
   const matchmakerAddr = await matchmakerApp.listen({ port: 0, host: '127.0.0.1' });
   sweeper = startSweeper({ redis, db: db.db, resolvePlayer }, 50);
 
+  // Stand up a session-router instance with a live etcd watch, and register one fake game-server member
+  // so the ring is non-empty by the time the gateway queries it.
+  routerWatcher = createRegistry({ hosts: etcdUrl });
+  const holder: RingHolder = { current: new HashRing([]) };
+  await routerWatcher.watch(GAME_SERVERS_PREFIX, (members) => {
+    const nodes: RingNode[] = [...members].map(([id, value]) => ({ id, value }));
+    holder.current = new HashRing(nodes);
+  });
+
+  registry = createRegistry({ hosts: etcdUrl });
+  await registry.register(GAME_SERVERS_PREFIX, `fake-${randomUUID()}`, FAKE_GAME_SERVER_URL);
+
+  // Give etcd a moment to notify the watcher.
+  for (let i = 0; i < 60 && holder.current.size() === 0; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+
+  routerApp = Fastify({ logger: false });
+  registerRouterRoutes(routerApp, holder);
+  const routerAddr = await routerApp.listen({ port: 0, host: '127.0.0.1' });
+
   subscriber = await createMatchSubscriber(redisUrl);
   const matchmaker = createMatchmakerClient(matchmakerAddr);
+  const router = createRouterClient(routerAddr);
 
   gatewayApp = Fastify({ logger: false });
-  registerMatchmakingRoute(gatewayApp, { subscriber, matchmaker, timeoutMs: 2_000 });
-  registerGamesRoute(gatewayApp, { db: db.db });
+  registerMatchmakingRoute(gatewayApp, { subscriber, matchmaker, router, timeoutMs: 2_000 });
+  registerGamesRoute(gatewayApp, { db: db.db, router });
   gatewayUrl = await gatewayApp.listen({ port: 0, host: '127.0.0.1' });
 }, 180_000);
 
@@ -65,9 +112,12 @@ afterAll(async () => {
   await subscriber?.stop();
   await gatewayApp?.close();
   await matchmakerApp?.close();
+  await routerApp?.close();
+  await registry?.close();
+  await routerWatcher?.close();
   redis?.disconnect();
   await db?.close();
-  await Promise.all([pg?.stop(), redisContainer?.stop()]);
+  await Promise.all([pg?.stop(), redisContainer?.stop(), etcdContainer?.stop()]);
 });
 
 afterEach(async () => {
@@ -101,6 +151,9 @@ describe('POST /matchmaking (end-to-end)', () => {
     expect(aliceBody.color).not.toBe(bobBody.color);
     expect(aliceBody.opponent.playerId).toBe(bob.playerId);
     expect(bobBody.opponent.playerId).toBe(alice.playerId);
+    // Both long-polls carry the same session-router verdict.
+    expect(aliceBody.wsUrl).toBe(FAKE_GAME_SERVER_URL);
+    expect(bobBody.wsUrl).toBe(FAKE_GAME_SERVER_URL);
   });
 
   it('returns 408 when nobody shows up before the gateway timeout', async () => {
@@ -142,10 +195,17 @@ describe('GET /games/:id', () => {
 
     const res = await fetch(`${gatewayUrl}/games/${gameId}`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { gameId: string; status: string; turn: string };
+    const body = (await res.json()) as {
+      gameId: string;
+      status: string;
+      turn: string;
+      wsUrl?: string;
+    };
     expect(body.gameId).toBe(gameId);
     expect(body.status).toBe('active');
     expect(body.turn).toBe('w');
+    // Active game → router gave us a URL.
+    expect(body.wsUrl).toBe(FAKE_GAME_SERVER_URL);
   });
 
   it('404s for an unknown gameId', async () => {
