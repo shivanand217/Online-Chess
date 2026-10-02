@@ -14,6 +14,9 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().default('postgres://chess:chess@localhost:5432/chess'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   ETCD_HOSTS: z.string().default('http://localhost:2379'),
+
+  // Internal service URLs the gateway talks to.
+  MATCHMAKER_URL: z.string().default('http://localhost:3001'),
 });
 
 export type Config = z.infer<typeof EnvSchema>;
