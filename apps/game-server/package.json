@@ -18,6 +18,7 @@
     "@chess/db": "workspace:*",
     "@chess/domain": "workspace:*",
     "@chess/protocol": "workspace:*",
+    "@chess/registry": "workspace:*",
     "@chess/telemetry": "workspace:*",
     "fastify": "^5.2.0",
     "ws": "^8.18.0"

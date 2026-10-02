@@ -17,6 +17,9 @@ const EnvSchema = z.object({
 
   // Internal service URLs the gateway talks to.
   MATCHMAKER_URL: z.string().default('http://localhost:3001'),
+
+  // Game server advertises this URL to etcd so the session router (and clients, via it) can reach it.
+  GAME_SERVER_PUBLIC_URL: z.string().default('ws://localhost:3003'),
 });
 
 export type Config = z.infer<typeof EnvSchema>;
