@@ -62,12 +62,34 @@ importers:
       '@chess/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@chess/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@chess/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@chess/redis':
+        specifier: workspace:*
+        version: link:../../packages/redis
       '@chess/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
       fastify:
         specifier: ^5.2.0
         version: 5.10.0
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.11.1
+    devDependencies:
+      '@chess/matchmaker':
+        specifier: workspace:*
+        version: link:../matchmaker
+      '@testcontainers/postgresql':
+        specifier: ^10.16.0
+        version: 10.28.0
+      testcontainers:
+        specifier: ^10.16.0
+        version: 10.28.0
 
   apps/leaderboard:
     dependencies:

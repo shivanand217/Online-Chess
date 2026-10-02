@@ -14,7 +14,16 @@
   },
   "dependencies": {
     "@chess/config": "workspace:*",
+    "@chess/db": "workspace:*",
+    "@chess/protocol": "workspace:*",
+    "@chess/redis": "workspace:*",
     "@chess/telemetry": "workspace:*",
-    "fastify": "^5.2.0"
+    "fastify": "^5.2.0",
+    "ioredis": "^5.4.2"
+  },
+  "devDependencies": {
+    "@chess/matchmaker": "workspace:*",
+    "@testcontainers/postgresql": "^10.16.0",
+    "testcontainers": "^10.16.0"
   }
 }
