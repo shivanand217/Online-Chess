@@ -13,6 +13,7 @@ import {
   getMoves,
   insertPlayer,
   runMigrations,
+  takeOwnership,
   type DbHandle,
 } from '@chess/db';
 import type { ServerMessage } from '@chess/protocol';
@@ -88,15 +89,20 @@ async function connect(gameId: string, playerId: string): Promise<Client> {
   };
 }
 
-async function seedGame() {
+interface SeedOpts {
+  whiteMs?: number;
+  blackMs?: number;
+}
+
+async function seedGame(opts: SeedOpts = {}) {
   const white = await insertPlayer(db.db, { username: `w-${randomUUID()}`, rating: 1500 });
   const black = await insertPlayer(db.db, { username: `b-${randomUUID()}`, rating: 1500 });
   const game = await createGame(db.db, {
     whiteId: white.playerId,
     blackId: black.playerId,
     timeControl: 'blitz-3-2',
-    whiteMs: 180_000,
-    blackMs: 180_000,
+    whiteMs: opts.whiteMs ?? 180_000,
+    blackMs: opts.blackMs ?? 180_000,
     turn: 'w',
     whiteRatingStart: white.rating,
     blackRatingStart: black.rating,
@@ -217,5 +223,81 @@ describe('game-server WS', () => {
     }
     const after = await getGame(db.db, game.gameId);
     expect(after?.status).toBe('finished');
+  });
+
+  it('flags the mover when their clock runs out without a move', async () => {
+    const { white, black, game } = await seedGame({ whiteMs: 300 });
+    const w = await connect(game.gameId, white.playerId);
+    await w.next(); // gameState
+    const b = await connect(game.gameId, black.playerId);
+    await b.next();
+
+    // Nobody moves — white's 300ms clock expires, flag timer fires.
+    const endW = await w.next(2_000);
+    const endB = await b.next(2_000);
+    expect(endW.type).toBe('gameEnd');
+    expect(endB.type).toBe('gameEnd');
+    if (endW.type === 'gameEnd') {
+      expect(endW.endReason).toBe('flag');
+      expect(endW.result).toBe('0-1'); // white flagged → black wins
+    }
+    const after = await getGame(db.db, game.gameId);
+    expect(after?.status).toBe('finished');
+    expect(after?.endReason).toBe('flag');
+  });
+
+  it('reconnect: a client that disconnects mid-game sees the full move log on rejoin', async () => {
+    const { white, black, game } = await seedGame();
+    const w = await connect(game.gameId, white.playerId);
+    await w.next();
+    const b = await connect(game.gameId, black.playerId);
+    await b.next();
+
+    // Play two half-moves: 1. e4 e5
+    w.send({ type: 'sendMove', from: 'e2', to: 'e4', moveNumber: 1 });
+    await w.next();
+    await b.next();
+    b.send({ type: 'sendMove', from: 'e7', to: 'e5', moveNumber: 1 });
+    await b.next();
+    await w.next();
+
+    w.close();
+
+    // Reconnect as white — new gameState should include both moves and the correct turn (w again, since
+    // black's move flipped turn back to white).
+    const w2 = await connect(game.gameId, white.playerId);
+    const state = await w2.next();
+    expect(state.type).toBe('gameState');
+    if (state.type === 'gameState') {
+      expect(state.color).toBe('w');
+      expect(state.turn).toBe('w');
+      expect(state.moves.map((m) => m.uci)).toEqual(['e2e4', 'e7e5']);
+    }
+    w2.close();
+    b.close();
+  });
+
+  it('fencing: a stale-generation write is rejected and the client gets an error', async () => {
+    const { white, black, game } = await seedGame();
+    const w = await connect(game.gameId, white.playerId);
+    await w.next();
+    const b = await connect(game.gameId, black.playerId);
+    await b.next();
+
+    // Simulate another server taking ownership — bumps the DB's generation past what this session holds.
+    await takeOwnership(db.db, game.gameId);
+
+    // White attempts to move; the DB's generation guard will reject the write.
+    w.send({ type: 'sendMove', from: 'e2', to: 'e4', moveNumber: 1 });
+    // moveAck comes before the DB rejection? No — we persist first, so the next message is `error`.
+    const msg = await w.next();
+    expect(msg.type).toBe('error');
+    if (msg.type === 'error') expect(msg.code).toBe('stale_generation');
+
+    // No move landed in the log.
+    const log = await getMoves(db.db, game.gameId);
+    expect(log).toHaveLength(0);
+    w.close();
+    b.close();
   });
 });
