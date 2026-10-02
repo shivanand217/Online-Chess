@@ -82,7 +82,23 @@ export type ClientMessage = z.infer<typeof ClientMessage>;
 
 // --- WebSocket: server → client -----------------------------------------------------------------------
 
+/** Sent once per connection right after a WS join, so the client knows which colour it plays and the
+ *  live clocks / move log without a separate REST call. */
+export const GameState = z.object({
+  type: z.literal('gameState'),
+  gameId: z.string().uuid(),
+  color: z.enum(['w', 'b']),
+  fen: z.string(),
+  turn: z.enum(['w', 'b']),
+  whiteMs: z.number().int(),
+  blackMs: z.number().int(),
+  moves: z.array(z.object({ uci: z.string(), san: z.string() })),
+  status: z.enum(['active', 'finished']),
+});
+export type GameState = z.infer<typeof GameState>;
+
 export const ServerMessage = z.discriminatedUnion('type', [
+  GameState,
   z.object({
     type: z.literal('moveAck'),
     accepted: z.boolean(),
@@ -98,6 +114,11 @@ export const ServerMessage = z.discriminatedUnion('type', [
     whiteMs: z.number().int(),
     blackMs: z.number().int(),
   }),
-  z.object({ type: z.literal('gameEnd'), result: z.string(), endReason: z.string() }),
+  z.object({
+    type: z.literal('gameEnd'),
+    result: z.enum(['1-0', '0-1', '1/2-1/2']),
+    endReason: z.enum(['checkmate', 'stalemate', 'draw', 'flag', 'resign']),
+  }),
+  z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
