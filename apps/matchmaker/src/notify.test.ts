@@ -116,6 +116,8 @@ describe('notifyPairing', () => {
     const [aliceMsg] = (await aliceInbox).map((s) => JSON.parse(s) as MatchNotification);
     const [bobMsg] = (await bobInbox).map((s) => JSON.parse(s) as MatchNotification);
 
+    expect(aliceMsg?.type).toBe('matched');
+    expect(bobMsg?.type).toBe('matched');
     expect(aliceMsg?.gameId).toBe(result?.gameId);
     expect(bobMsg?.gameId).toBe(result?.gameId);
     expect(aliceMsg?.color).not.toBe(bobMsg?.color);

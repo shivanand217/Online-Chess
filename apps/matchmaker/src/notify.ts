@@ -75,6 +75,7 @@ export async function notifyPairing(
     me: WaiterMetadata,
     them: PlayerLookup,
   ): MatchNotification => ({
+    type: 'matched',
     requestId: forRequestId,
     gameId: game.gameId,
     color: forRequestId === colors.white ? 'w' : 'b',

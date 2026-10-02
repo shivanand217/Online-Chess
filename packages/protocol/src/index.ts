@@ -26,6 +26,7 @@ export type MatchmakingResponse = z.infer<typeof MatchmakingResponse>;
 /** Published on `match:<requestId>` when the matchmaker pairs a waiter; the two sides' payloads mirror
  *  each other with the colour flipped. */
 export const MatchNotification = z.object({
+  type: z.literal('matched'),
   requestId: z.string().uuid(),
   gameId: z.string().uuid(),
   color: z.enum(['w', 'b']),
@@ -37,6 +38,18 @@ export const MatchNotification = z.object({
   timeControl: TimeControl,
 });
 export type MatchNotification = z.infer<typeof MatchNotification>;
+
+/** Published on `match:<requestId>` when the sweeper gives up (past `maxWaitMs`); the gateway turns this
+ *  into a 408 for the waiting client. */
+export const MatchExpired = z.object({
+  type: z.literal('expired'),
+  requestId: z.string().uuid(),
+});
+export type MatchExpired = z.infer<typeof MatchExpired>;
+
+/** Everything a subscriber on a `match:<requestId>` channel may receive. */
+export const MatchResult = z.discriminatedUnion('type', [MatchNotification, MatchExpired]);
+export type MatchResult = z.infer<typeof MatchResult>;
 
 // --- WebSocket: client → server -----------------------------------------------------------------------
 
