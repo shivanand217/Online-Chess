@@ -14,7 +14,7 @@ export interface MatchmakingDeps {
   timeoutMs?: number;
 }
 
-const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_TIMEOUT_MS = 15_000;
 
 export function registerMatchmakingRoute(app: FastifyInstance, deps: MatchmakingDeps): void {
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;

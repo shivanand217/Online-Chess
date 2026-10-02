@@ -12,7 +12,7 @@ export const DEFAULT_WIDEN: WidenConfig = {
   initialWindow: 50,
   growthPerSecond: 25,
   maxWindow: 800,
-  maxWaitMs: 60_000,
+  maxWaitMs: 15_000,
 };
 
 export function windowFor(waitedMs: number, config: WidenConfig = DEFAULT_WIDEN): number {
