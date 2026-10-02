@@ -4,6 +4,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./ring": "./src/ring.ts",
+    "./routes": "./src/routes.ts"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsup",
