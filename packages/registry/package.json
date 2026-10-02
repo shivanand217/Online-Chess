@@ -1,0 +1,21 @@
+{
+  "//": "etcd-based service registry: register with a lease, watch a prefix, release on shutdown.",
+  "name": "@chess/registry",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "etcd3": "^1.1.2"
+  },
+  "devDependencies": {
+    "testcontainers": "^10.16.0"
+  }
+}

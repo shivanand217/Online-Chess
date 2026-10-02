@@ -1,0 +1,9 @@
+// TypeScript config for @chess/registry; extends the workspace base.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}
