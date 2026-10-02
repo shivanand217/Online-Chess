@@ -13,8 +13,18 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@chess/chess-engine": "workspace:*",
     "@chess/config": "workspace:*",
+    "@chess/db": "workspace:*",
+    "@chess/domain": "workspace:*",
+    "@chess/protocol": "workspace:*",
     "@chess/telemetry": "workspace:*",
-    "fastify": "^5.2.0"
+    "fastify": "^5.2.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^10.16.0",
+    "@types/ws": "^8.5.13",
+    "testcontainers": "^10.16.0"
   }
 }
