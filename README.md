@@ -1,96 +1,122 @@
-# Production-Grade Distributed Real-Time Chess Platform - like chess.com
+# Chess
 
-A staff-level portfolio build of an online chess platform, engineered the way a
-real product at scale would be: skill-based matchmaking, authoritative real-time
-gameplay over WebSockets, a global leaderboard, and the full production envelope
-around it — microservices, Redis, Postgres, Docker, Kubernetes on GCP, and
-end-to-end observability.
+A real-time online chess platform I'm building in TypeScript. Players sign in,
+get matched against someone of a similar rating, play a timed game over a
+WebSocket, and show up on a global leaderboard afterwards. The repo is a pnpm
+monorepo with a handful of small services, a shared chess engine, a Postgres
+schema, and Redis for the parts that need fast shared state.
 
-The design target is **500K concurrent games (1M live WebSocket connections)** at
-peak. We build it phase by phase, and we validate proportionally on a laptop /
-small cluster while designing every component so the same code scales to the
-target with more replicas.
+## What's in here
 
-> **Node.js note:** the whole platform is TypeScript on Node 22 LTS, ESM-first,
-> using current production patterns (structured config, graceful shutdown,
-> backpressure-aware WebSockets, OpenTelemetry auto-instrumentation).
+- A matchmaking service that keeps waiting players in a Redis sorted set per
+  time control and pairs them atomically with a Lua script, widening the rating
+  window the longer a player waits.
+- A gateway that holds the matchmaking request as a long-poll until the
+  matchmaker publishes a pairing, then hands the client their game id and
+  colour.
+- A game server (planned) that owns live games in memory, validates every move,
+  runs the two clocks, and persists each move before broadcasting it to the
+  other side.
+- A session router (planned) that pins both players of a game to the same game
+  server using a consistent-hash ring over an etcd membership registry, so a
+  server crash can be recovered by a replacement that replays the move log.
+- A leaderboard (planned) that applies the ELO delta on game end, idempotent on
+  the game id, and serves top-N and own-rank reads from a Redis sorted set
+  mirrored by Postgres.
+- Shared packages for the chess rules (a wrapper over chess.js), the Drizzle
+  schema and repositories, the wire contracts (zod schemas used on both ends),
+  the typed config loader, a Pino logger with health/metrics routes, and a
+  Redis client factory with a tiny Lua-script helper.
 
----
-
-## Documentation
-
-Read in order — each builds on the last.
-
-| #   | Doc                                                | What it covers                                                                                                                 |
-| --- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| 00  | [Requirements & Capacity](docs/00-requirements.md) | Functional / non-functional requirements, scale math, capacity estimates                                                       |
-| 01  | [High-Level Design](docs/01-hld.md)                | Services, data flows, the three core requirement paths, architecture diagram                                                   |
-| 02  | [Low-Level Design](docs/02-lld.md)                 | Schemas, API + WebSocket protocol, matchmaking claim, consistent-hash routing, fencing, latency compensation, leaderboard rank |
-| 03  | [Tech Stack](docs/03-tech-stack.md)                | Every technology decision with rationale and the alternative we rejected                                                       |
-| 04  | [Project Plan (Phases)](docs/04-project-plan.md)   | **The roadmap.** Phase 0–8 with deliverables and acceptance criteria                                                           |
-| 05  | [Observability & SLOs](docs/05-observability.md)   | Metrics, traces, logs, dashboards, alerting, SLOs                                                                              |
-| 06  | [Deployment (GCP / K8s)](docs/06-deployment.md)    | Terraform, GKE, Cloud SQL, Memorystore, Helm, CI/CD, autoscaling                                                               |
-
----
-
-## System at a glance
-
-```mermaid
-flowchart LR
-  subgraph Client
-    C1[Player A]
-    C2[Player B]
-  end
-
-  C1 & C2 -->|REST /matchmaking, /leaderboard| GW[API Gateway<br/>Fastify]
-  C1 & C2 -->|WSS /games/:id| RT[Session Router<br/>consistent hash]
-
-  GW --> MM[Matchmaker Workers]
-  MM <-->|sorted sets + pub/sub| RDS[(Redis)]
-  MM --> PG[(Postgres)]
-
-  RT --> GS[Game Servers<br/>stateful, in-memory]
-  GS -->|append move log / clocks| PG
-  GS -->|membership| ETCD[(etcd registry)]
-  RT -->|watch ring| ETCD
-
-  GS -->|game end: ELO apply| LB[Leaderboard Service]
-  LB --> RDS
-  LB --> PG
-
-  GS & MM & GW & LB -.OTel.-> OBS[(Prometheus / Grafana / Tempo)]
-```
-
----
-
-## Repository layout (target)
+## Repo layout
 
 ```
 chess/
 ├── apps/
-│   ├── gateway/          # REST edge: auth, matchmaking, leaderboard reads (Fastify)
-│   ├── matchmaker/       # Matchmaking workers (Redis sorted sets, atomic claim)
-│   ├── session-router/   # Consistent-hash router for game servers
-│   ├── game-server/      # Stateful real-time game servers (uWebSockets.js)
-│   └── leaderboard/      # ELO apply workers + rank/read API
+│   ├── gateway/          REST edge: matchmaking long-poll, game reads
+│   ├── matchmaker/       pairing worker (Redis pool + Lua claim + sweeper)
+│   ├── session-router/   consistent-hash routing (planned)
+│   ├── game-server/      live games over WebSocket (planned)
+│   └── leaderboard/      ELO apply + rank reads (planned)
 ├── packages/
-│   ├── chess-engine/     # Move validation & rules (wraps chess.js)
-│   ├── domain/           # Shared entities, value objects, ELO
-│   ├── db/               # Drizzle schema, migrations, repositories
-│   ├── redis/            # ioredis wrappers + Lua scripts
-│   ├── protocol/         # zod DTOs + WS message schemas (shared client/server)
-│   ├── config/           # env loading + validation (zod)
-│   └── telemetry/        # OpenTelemetry, Prometheus, Pino logger
-├── infra/
-│   ├── docker/           # Dockerfiles (multi-stage, distroless)
-│   ├── compose/          # docker-compose local stack
-│   ├── helm/             # Helm charts per service
-│   └── terraform/        # GCP IaC (GKE, Cloud SQL, Memorystore, ...)
-├── tools/                # load tests (k6), scripts, chaos experiments
-└── docs/                 # this documentation
+│   ├── chess-engine/     rules wrapper over chess.js
+│   ├── domain/           pure types + ELO + time-control parsing
+│   ├── db/               Drizzle schema, migrations, repositories, seed
+│   ├── redis/            ioredis factory + Lua-script helper
+│   ├── protocol/         zod request/response + WS message schemas
+│   ├── config/           typed env loader
+│   └── telemetry/        logger + /healthz /readyz /metrics
+├── infra/compose/        docker-compose for Postgres, Redis, etcd
+└── docs/                 longer design notes (links below)
 ```
+
+## Running it locally
+
+The whole stack runs on Docker + Node 22 + pnpm. Each service is wired through
+`@chess/config` and reads defaults from env, so the laptop setup needs no
+configuration beyond starting the compose stack.
+
+```bash
+pnpm install
+pnpm stack:up                                       # Postgres + Redis + etcd
+pnpm --filter @chess/db exec drizzle-kit migrate    # apply the schema
+SEED_COUNT=20 pnpm --filter @chess/db db:seed       # a few seed players
+
+# two terminals:
+pnpm --filter @chess/matchmaker dev                 # :3001
+pnpm --filter @chess/gateway dev                    # :3000
+```
+
+Health checks: `curl localhost:3000/healthz` and `localhost:3001/healthz`.
+
+A full matchmaking round-trip, two players at once:
+
+```bash
+curl -s -X POST http://localhost:3000/matchmaking \
+  -H 'content-type: application/json' -H 'x-player-id: <uuid-a>' \
+  -d '{"timeControl":"blitz-3-2"}' &
+curl -s -X POST http://localhost:3000/matchmaking \
+  -H 'content-type: application/json' -H 'x-player-id: <uuid-b>' \
+  -d '{"timeControl":"blitz-3-2"}' &
+wait
+```
+
+Both responses carry the same `gameId`, mirrored colours, and the other
+player's details. Fetch the game row with `GET /games/<gameId>`.
+
+## Scripts
+
+- `pnpm dev` — bring up the compose stack and run every app under `tsx watch`.
+- `pnpm build` — bundle each service with tsup.
+- `pnpm test` — Vitest across every package. Some tests spin up Postgres or
+  Redis via Testcontainers, so Docker needs to be running.
+- `pnpm lint` / `pnpm typecheck` — ESLint + `tsc --noEmit` over the whole
+  workspace.
+- `pnpm --filter @chess/matchmaker smoke` — manual smoke script that fires N
+  concurrent claims against a live Redis and verifies the pairing invariants.
+
+## Design notes
+
+Longer-form docs live under `docs/`. They're the planning side of the repo and
+go into more depth than the code comments.
+
+- [00-requirements.md](docs/00-requirements.md) — what the system needs to do
+  and how much of it.
+- [01-hld.md](docs/01-hld.md) — the services and how they talk to each other.
+- [02-lld.md](docs/02-lld.md) — schema, API shapes, the matchmaking claim, the
+  game-server fencing token, latency compensation, leaderboard rank reads.
+- [03-tech-stack.md](docs/03-tech-stack.md) — the technology choices with the
+  alternative that was rejected for each.
+- [04-project-plan.md](docs/04-project-plan.md) — the build order, feature by
+  feature, with the test that proves each piece is done.
+- [05-observability.md](docs/05-observability.md) — logs, metrics, traces,
+  dashboards.
+- [06-deployment.md](docs/06-deployment.md) — packaging and the deploy target.
 
 ## Status
 
-Planning complete. Implementation begins at **Phase 0**. See
-[the project plan](docs/04-project-plan.md).
+The chess rules, the Postgres layer with the generation-fenced move write, the
+ELO math, matchmaking end-to-end (pool, atomic claim, widening-window sweeper,
+long-poll, game creation), and the gateway's `POST /matchmaking` + `GET
+/games/:id` are all in and tested. The game server, the session router, the
+leaderboard, and the observability pass are next.
