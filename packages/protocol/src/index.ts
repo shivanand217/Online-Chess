@@ -108,6 +108,9 @@ export const ServerMessage = z.discriminatedUnion('type', [
     reason: z.string().optional(),
     whiteMs: z.number().int(),
     blackMs: z.number().int(),
+    /** Milliseconds the server credited back to the mover for round-trip transit. Present on an
+     *  accepted move; absent on rejections. */
+    creditMs: z.number().int().nonnegative().optional(),
   }),
   z.object({
     type: z.literal('opponentMove'),
