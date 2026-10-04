@@ -9,6 +9,7 @@ import { IllegalMoveError } from '@chess/chess-engine';
 import { appendMove, finishGame, getMoves, type Database } from '@chess/db';
 import { ClientMessage, type ServerMessage } from '@chess/protocol';
 import { FlagTimers } from './flag-timer.js';
+import { RttTracker, creditFromMedian } from './rtt-tracker.js';
 import type { EndReason, GameSession } from './session.js';
 import { TimeExpiredError } from './session.js';
 import type { SessionManager } from './sessions.js';
@@ -17,7 +18,14 @@ import type { Result } from '@chess/chess-engine';
 export interface WsDeps {
   db: Database;
   sessions: SessionManager;
+  /** How often to ping each live connection to sample RTT. */
+  pingIntervalMs?: number;
+  /** Hard ceiling on the credit we give a mover for RTT compensation (ms). */
+  rttCreditCapMs?: number;
 }
+
+const DEFAULT_PING_INTERVAL_MS = 5_000;
+const DEFAULT_RTT_CAP_MS = 100;
 
 /** Return the current mover's remaining ms, used to schedule the flag timer. */
 function remainingForMover(session: GameSession): number {
@@ -28,18 +36,33 @@ function remainingForMover(session: GameSession): number {
 interface Peer {
   playerId: string;
   socket: WebSocket;
+  pingTimer?: NodeJS.Timeout;
 }
 
 export class WsHub {
   /** gameId → playerId → peer */
   private readonly peers = new Map<string, Map<string, Peer>>();
   private readonly flagTimers = new FlagTimers();
+  private readonly rtt = new RttTracker();
+  private readonly pingIntervalMs: number;
+  private readonly rttCreditCapMs: number;
 
-  constructor(private readonly deps: WsDeps) {}
+  constructor(private readonly deps: WsDeps) {
+    this.pingIntervalMs = deps.pingIntervalMs ?? DEFAULT_PING_INTERVAL_MS;
+    this.rttCreditCapMs = deps.rttCreditCapMs ?? DEFAULT_RTT_CAP_MS;
+  }
 
-  /** Shut down any pending flag timers — called from the service's onClose hook. */
+  /** Shut down any pending timers — called from the service's onClose hook. */
   stop(): void {
     this.flagTimers.cancelAll();
+    for (const slot of this.peers.values()) {
+      for (const peer of slot.values()) if (peer.pingTimer) clearInterval(peer.pingTimer);
+    }
+  }
+
+  /** Test seam: inject a known RTT sample so credit math is deterministic in tests. */
+  recordRttSample(playerId: string, rttMs: number): void {
+    this.rtt.sample(playerId, rttMs);
   }
 
   /** Attach a WebSocket server to an existing HTTP server. Expects upgrades at /ws/games/:gameId with
@@ -94,8 +117,14 @@ export class WsHub {
   private onJoin(session: GameSession, playerId: string, ws: WebSocket): void {
     const slot = this.peers.get(session.gameId) ?? new Map<string, Peer>();
     const prior = slot.get(playerId);
-    if (prior) prior.socket.close(4000, 'replaced');
-    slot.set(playerId, { playerId, socket: ws });
+    if (prior) {
+      if (prior.pingTimer) clearInterval(prior.pingTimer);
+      prior.socket.close(4000, 'replaced');
+    }
+    // Fresh connection → wipe any stale RTT samples from the dead socket.
+    this.rtt.clear(playerId);
+    const peer: Peer = { playerId, socket: ws };
+    slot.set(playerId, peer);
     this.peers.set(session.gameId, slot);
 
     const color = session.colorOf(playerId);
@@ -105,6 +134,22 @@ export class WsHub {
     if (session.status === 'active' && slot.size === 1) {
       this.armFlagTimer(session);
     }
+
+    // Ping loop for RTT sampling — we send a timestamp as the ping payload and compute the RTT when the
+    // native pong echoes it back.
+    peer.pingTimer = setInterval(() => {
+      if (ws.readyState !== ws.OPEN) return;
+      try {
+        ws.ping(Buffer.from(String(Date.now())));
+      } catch {
+        // Writing a ping to a half-closed socket occasionally throws; the close handler will clean up.
+      }
+    }, this.pingIntervalMs);
+    ws.on('pong', (data) => {
+      const sent = Number(data.toString());
+      if (!Number.isFinite(sent)) return;
+      this.rtt.sample(playerId, Date.now() - sent);
+    });
 
     ws.on('message', (data) => void this.onMessage(session, playerId, data.toString()));
     ws.on('close', () => this.onClose(session.gameId, playerId, ws));
@@ -178,9 +223,15 @@ export class WsHub {
       return;
     }
 
+    const creditMs = creditFromMedian(this.rtt.median(playerId), this.rttCreditCapMs);
+
     let applied;
     try {
-      applied = session.applyMove({ from: msg.from, to: msg.to, promotion: msg.promotion });
+      applied = session.applyMove(
+        { from: msg.from, to: msg.to, promotion: msg.promotion },
+        Date.now(),
+        creditMs,
+      );
     } catch (err) {
       const clocks = session.snapshotClocks();
       const reason =
@@ -232,6 +283,7 @@ export class WsHub {
       accepted: true,
       whiteMs: applied.whiteMs,
       blackMs: applied.blackMs,
+      creditMs,
     });
     this.broadcastExcept(session.gameId, playerId, {
       type: 'opponentMove',
@@ -273,7 +325,11 @@ export class WsHub {
     this.deps.sessions.release(session.gameId);
     const slot = this.peers.get(session.gameId);
     if (slot) {
-      for (const peer of slot.values()) peer.socket.close(1000, 'game ended');
+      for (const peer of slot.values()) {
+        if (peer.pingTimer) clearInterval(peer.pingTimer);
+        this.rtt.clear(peer.playerId);
+        peer.socket.close(1000, 'game ended');
+      }
       this.peers.delete(session.gameId);
     }
   }
@@ -282,7 +338,9 @@ export class WsHub {
     const slot = this.peers.get(gameId);
     const peer = slot?.get(playerId);
     if (peer && peer.socket === ws) {
+      if (peer.pingTimer) clearInterval(peer.pingTimer);
       slot?.delete(playerId);
+      this.rtt.clear(playerId);
       if (slot && slot.size === 0) this.peers.delete(gameId);
     }
   }

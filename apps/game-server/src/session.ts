@@ -96,10 +96,12 @@ export class GameSession {
     return null;
   }
 
-  /** Validate + apply a move, deduct elapsed time, add Fischer increment, flip turn, bump ply. */
-  applyMove(input: MoveInput, now: number = Date.now()): AppliedMoveState {
+  /** Validate + apply a move. `creditMs` is the RTT compensation the hub asks us to spot the mover —
+   *  it reduces the elapsed think time we deduct. Flip turn, add Fischer increment, bump ply. */
+  applyMove(input: MoveInput, now: number = Date.now(), creditMs = 0): AppliedMoveState {
     const mover = this._turn;
-    const elapsed = Math.max(0, now - this.lastMoveAt);
+    const rawElapsed = Math.max(0, now - this.lastMoveAt);
+    const elapsed = Math.max(0, rawElapsed - Math.max(0, creditMs));
     const mustSpendMs = mover === 'w' ? this.whiteMs : this.blackMs;
     if (elapsed >= mustSpendMs) {
       throw new TimeExpiredError(mover);
