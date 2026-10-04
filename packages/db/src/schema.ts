@@ -2,6 +2,7 @@
 // pull their row types from the `$infer` exports at the bottom, so the DB shape and TS types never drift.
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   char,
   index,
   integer,
@@ -48,6 +49,9 @@ export const games = pgTable(
     whiteRatingStart: integer('white_rating_start').notNull(),
     blackRatingStart: integer('black_rating_start').notNull(),
     generation: integer('generation').notNull().default(0),
+    /** Set to true once the leaderboard has fanned the ELO delta into players + Redis — the idempotency
+     *  gate. The sweeper's UPDATE is guarded on this being false, so a replay is a no-op. */
+    ratingApplied: boolean('rating_applied').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

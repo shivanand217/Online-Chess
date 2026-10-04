@@ -1,5 +1,7 @@
-# Paths Prettier should skip when formatting. Hand-written.
+# Paths Prettier should skip when formatting.
 **/dist/**
 **/node_modules/**
 .turbo/**
 pnpm-lock.yaml
+# drizzle-kit's generated migration folders — the tool owns their formatting.
+packages/db/drizzle/**

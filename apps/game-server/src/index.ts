@@ -6,7 +6,7 @@ import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { createDb } from '@chess/db';
 import { createRegistry } from '@chess/registry';
-import { installGracefulShutdown, registerObservability } from '@chess/telemetry';
+import { createGenReqId, installGracefulShutdown, registerObservability } from '@chess/telemetry';
 import { SessionManager } from './sessions.js';
 import { WsHub } from './ws.js';
 
@@ -15,7 +15,10 @@ const INSTANCE_ID = randomUUID();
 const GAME_SERVERS_PREFIX = '/chess/game-servers/';
 const config = loadConfig();
 
-const app = Fastify({ logger: { name: SERVICE, level: config.LOG_LEVEL } });
+const app = Fastify({
+  logger: { name: SERVICE, level: config.LOG_LEVEL },
+  genReqId: createGenReqId(),
+});
 registerObservability(app);
 
 const db = createDb(config.DATABASE_URL);

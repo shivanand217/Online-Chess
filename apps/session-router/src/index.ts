@@ -4,7 +4,7 @@
 import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { createRegistry } from '@chess/registry';
-import { installGracefulShutdown, registerObservability } from '@chess/telemetry';
+import { createGenReqId, installGracefulShutdown, registerObservability } from '@chess/telemetry';
 import { HashRing, type RingNode } from './ring.js';
 import { registerRoutes, type RingHolder } from './routes.js';
 
@@ -12,7 +12,10 @@ const SERVICE = 'session-router';
 const config = loadConfig();
 const GAME_SERVERS_PREFIX = '/chess/game-servers/';
 
-const app = Fastify({ logger: { name: SERVICE, level: config.LOG_LEVEL } });
+const app = Fastify({
+  logger: { name: SERVICE, level: config.LOG_LEVEL },
+  genReqId: createGenReqId(),
+});
 registerObservability(app);
 
 const registry = createRegistry({ hosts: config.ETCD_HOSTS });

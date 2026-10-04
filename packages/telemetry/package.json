@@ -1,5 +1,5 @@
 {
-  "//": "Shared observability: Pino logger, health/readiness/metrics, graceful shutdown.",
+  "//": "Shared observability: Pino logger, correlation IDs, RED metrics, health/readiness endpoints, graceful shutdown.",
   "name": "@chess/telemetry",
   "version": "0.0.0",
   "private": true,
@@ -13,7 +13,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "pino": "^9.6.0"
+    "pino": "^9.6.0",
+    "prom-client": "^15.1.3"
   },
   "devDependencies": {
     "fastify": "^5.2.0"
