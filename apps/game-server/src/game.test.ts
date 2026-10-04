@@ -277,6 +277,35 @@ describe('game-server WS', () => {
     b.close();
   });
 
+  it('credits the mover for RTT: moveAck.creditMs is half the median, capped at 100ms', async () => {
+    const { white, black, game } = await seedGame();
+    const w = await connect(game.gameId, white.playerId);
+    await w.next();
+    const b = await connect(game.gameId, black.playerId);
+    await b.next();
+
+    // Seed a predictable median (60ms) for white — credit should be 30ms.
+    for (const sample of [40, 60, 80]) hub.recordRttSample(white.playerId, sample);
+
+    w.send({ type: 'sendMove', from: 'e2', to: 'e4', moveNumber: 1 });
+    const ack = await w.next();
+    expect(ack.type).toBe('moveAck');
+    if (ack.type === 'moveAck') {
+      expect(ack.accepted).toBe(true);
+      expect(ack.creditMs).toBe(30);
+    }
+
+    // A spike client (median 500ms) hits the cap (100ms), not 250ms.
+    for (const sample of [500, 500, 500]) hub.recordRttSample(black.playerId, sample);
+    await b.next(); // consume white's opponentMove
+    b.send({ type: 'sendMove', from: 'e7', to: 'e5', moveNumber: 1 });
+    const ackB = await b.next();
+    if (ackB.type === 'moveAck') expect(ackB.creditMs).toBe(100);
+
+    w.close();
+    b.close();
+  });
+
   it('fencing: a stale-generation write is rejected and the client gets an error', async () => {
     const { white, black, game } = await seedGame();
     const w = await connect(game.gameId, white.playerId);
