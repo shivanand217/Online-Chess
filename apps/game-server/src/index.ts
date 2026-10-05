@@ -19,12 +19,22 @@ const app = Fastify({
   logger: { name: SERVICE, level: config.LOG_LEVEL },
   genReqId: createGenReqId(),
 });
-registerObservability(app);
 
 const db = createDb(config.DATABASE_URL);
 const sessions = new SessionManager(db.db);
 const hub = new WsHub({ db: db.db, sessions });
 const registry = createRegistry({ hosts: config.ETCD_HOSTS });
+
+registerObservability(app, {
+  ready: async () => {
+    try {
+      await db.pool.query('SELECT 1');
+      return true;
+    } catch {
+      return false;
+    }
+  },
+});
 
 app.addHook('onClose', async () => {
   hub.stop();

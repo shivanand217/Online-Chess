@@ -9,6 +9,7 @@ import { IllegalMoveError } from '@chess/chess-engine';
 import { appendMove, finishGame, getMoves, type Database } from '@chess/db';
 import { ClientMessage, type ServerMessage } from '@chess/protocol';
 import { FlagTimers } from './flag-timer.js';
+import { liveConnections, moveLatencySeconds, movesTotal, rttCreditMsTotal } from './metrics.js';
 import { RttTracker, creditFromMedian } from './rtt-tracker.js';
 import type { EndReason, GameSession } from './session.js';
 import { TimeExpiredError } from './session.js';
@@ -120,6 +121,9 @@ export class WsHub {
     if (prior) {
       if (prior.pingTimer) clearInterval(prior.pingTimer);
       prior.socket.close(4000, 'replaced');
+    } else {
+      // Only count as a new live connection if we weren't just replacing a prior socket for the same id.
+      liveConnections.inc();
     }
     // Fresh connection → wipe any stale RTT samples from the dead socket.
     this.rtt.clear(playerId);
@@ -220,10 +224,13 @@ export class WsHub {
         whiteMs: clocks.whiteMs,
         blackMs: clocks.blackMs,
       });
+      movesTotal.inc({ result: 'rejected' });
       return;
     }
 
+    const start = process.hrtime.bigint();
     const creditMs = creditFromMedian(this.rtt.median(playerId), this.rttCreditCapMs);
+    rttCreditMsTotal.inc(creditMs);
 
     let applied;
     try {
@@ -247,6 +254,7 @@ export class WsHub {
         whiteMs: clocks.whiteMs,
         blackMs: clocks.blackMs,
       });
+      movesTotal.inc({ result: reason });
       if (err instanceof TimeExpiredError) {
         await this.endGame(session, err.side === 'w' ? '0-1' : '1-0', 'flag');
       }
@@ -275,8 +283,12 @@ export class WsHub {
         code: 'stale_generation',
         message: 'this server no longer owns the game',
       });
+      movesTotal.inc({ result: 'stale_generation' });
       return;
     }
+
+    movesTotal.inc({ result: 'accepted' });
+    moveLatencySeconds.observe(Number(process.hrtime.bigint() - start) / 1e9);
 
     this.sendTo(session.gameId, playerId, {
       type: 'moveAck',
@@ -328,6 +340,7 @@ export class WsHub {
       for (const peer of slot.values()) {
         if (peer.pingTimer) clearInterval(peer.pingTimer);
         this.rtt.clear(peer.playerId);
+        liveConnections.dec();
         peer.socket.close(1000, 'game ended');
       }
       this.peers.delete(session.gameId);
@@ -341,6 +354,7 @@ export class WsHub {
       if (peer.pingTimer) clearInterval(peer.pingTimer);
       slot?.delete(playerId);
       this.rtt.clear(playerId);
+      liveConnections.dec();
       if (slot && slot.size === 0) this.peers.delete(gameId);
     }
   }

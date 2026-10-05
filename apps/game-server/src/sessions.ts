@@ -3,6 +3,7 @@
 import { ChessEngine } from '@chess/chess-engine';
 import { getGame, getMoves, takeOwnership, type Database, type Game } from '@chess/db';
 import { parseTimeControl } from '@chess/domain';
+import { activeGames } from './metrics.js';
 import { GameSession } from './session.js';
 
 export class SessionManager {
@@ -50,12 +51,13 @@ export class SessionManager {
       ply: moves.length,
     });
     this.sessions.set(gameId, session);
+    activeGames.set(this.sessions.size);
     return session;
   }
 
   /** Evict a finished game from memory. */
   release(gameId: string): void {
-    this.sessions.delete(gameId);
+    if (this.sessions.delete(gameId)) activeGames.set(this.sessions.size);
   }
 
   /** Snapshot of the known Game row for the gateway/client bootstrap paths. */
