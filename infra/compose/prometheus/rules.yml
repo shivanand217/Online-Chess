@@ -1,0 +1,84 @@
+# Recording rules precompute the quantiles the dashboards and alerts both read, so panels stay cheap and
+# alerts don't recompute the same histogram twice.
+groups:
+  - name: chess.recording
+    interval: 30s
+    rules:
+      - record: job:http_request_duration_seconds:p95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (service, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+      - record: job:http_request_duration_seconds:p99
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (service, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+      - record: job:http_requests:rate5m
+        expr: sum by (service) (rate(http_requests_total[5m]))
+      - record: job:http_errors:rate5m
+        expr: sum by (service) (rate(http_requests_total{status=~"5.."}[5m]))
+      - record: job:http_error_ratio:5m
+        expr: |
+          job:http_errors:rate5m
+            /
+          clamp_min(job:http_requests:rate5m, 1e-9)
+
+      - record: matchmaking_wait_seconds:p95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (timeControl, le) (rate(matchmaking_wait_seconds_bucket[5m]))
+          )
+      - record: game_server_move_latency_seconds:p99
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le) (rate(game_server_move_latency_seconds_bucket[5m]))
+          )
+      - record: leaderboard_elo_apply_duration_seconds:p95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(leaderboard_elo_apply_duration_seconds_bucket[5m]))
+          )
+
+  - name: chess.alerts
+    rules:
+      - alert: MovePropagationSLOBreach
+        # Move p99 should stay under 200ms (LLD target). A sustained 5m breach pages.
+        expr: game_server_move_latency_seconds:p99 > 0.2
+        for: 5m
+        labels: { severity: page, slo: move_p99 }
+        annotations:
+          summary: 'Game-server move p99 above 200ms for 5m'
+          description: 'Current p99 is {{ $value | humanizeDuration }}. See grafana dashboard: Game Server.'
+
+      - alert: MatchmakingWaitSLOBreach
+        # Blitz match wait p95 should stay under 10s.
+        expr: matchmaking_wait_seconds:p95 > 10
+        for: 10m
+        labels: { severity: page, slo: match_wait_p95 }
+        annotations:
+          summary: 'Matchmaking p95 wait above 10s for 10m'
+          description: 'By time control: {{ $labels.timeControl }}. Current p95 {{ $value }}s.'
+
+      - alert: ServiceErrorRateHigh
+        # Any service with >1% 5xx over 5m is paging.
+        expr: job:http_error_ratio:5m > 0.01
+        for: 5m
+        labels: { severity: page, slo: availability }
+        annotations:
+          summary: '{{ $labels.service }} 5xx rate above 1% for 5m'
+          description: 'Current rate {{ $value | humanizePercentage }}.'
+
+      - alert: LeaderboardApplyBacklog
+        # Pending-games should drain within a few sweeper ticks. 100+ sustained means the sweeper is
+        # falling behind or the DB layer is slow.
+        expr: leaderboard_pending_games > 100
+        for: 10m
+        labels: { severity: warn, slo: elo_apply_lag }
+        annotations:
+          summary: 'Leaderboard sweeper has >100 games waiting for ELO apply'

@@ -59,6 +59,7 @@ services:
       - '9090:9090'
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules.yml:/etc/prometheus/rules.yml:ro
 
   grafana:
     image: grafana/grafana:11.4.0
@@ -71,6 +72,7 @@ services:
       - '3100:3000'
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
 
   tempo:
     image: grafana/tempo:2.7.0
