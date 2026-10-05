@@ -5,6 +5,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { games, type Database } from '@chess/db';
 import { applyRatingForGame } from './apply.js';
+import { pendingGames } from './metrics.js';
 
 export interface SweeperDeps {
   db: Database;
@@ -23,6 +24,7 @@ export async function tick(deps: SweeperDeps): Promise<number> {
     .where(and(eq(games.status, 'finished'), eq(games.ratingApplied, false)))
     .orderBy(asc(games.updatedAt))
     .limit(batchSize);
+  pendingGames.set(pending.length);
 
   let applied = 0;
   for (const row of pending) {

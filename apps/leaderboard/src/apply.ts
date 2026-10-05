@@ -8,6 +8,7 @@ import type Redis from 'ioredis';
 import { games, players, type Database } from '@chess/db';
 import { ratingChange } from '@chess/domain';
 import { LEADERBOARD_KEY } from './keys.js';
+import { eloApplyDurationSeconds } from './metrics.js';
 
 export interface AppliedResult {
   gameId: string;
@@ -24,6 +25,7 @@ export async function applyRatingForGame(
   redis: Redis,
   gameId: string,
 ): Promise<AppliedResult | null> {
+  const start = process.hrtime.bigint();
   const result = await db.transaction(async (tx) => {
     const claimed = await tx
       .update(games)
@@ -77,7 +79,13 @@ export async function applyRatingForGame(
     } satisfies AppliedResult;
   });
 
-  if (!result) return null;
+  if (!result) {
+    eloApplyDurationSeconds.observe(
+      { result: 'noop' },
+      Number(process.hrtime.bigint() - start) / 1e9,
+    );
+    return null;
+  }
 
   // Fan the new ratings into Redis so top-N / rank reads reflect them immediately. One ZADD covers both
   // members; failure here is non-fatal — the reconcile pass rebuilds from Postgres truth.
@@ -87,6 +95,10 @@ export async function applyRatingForGame(
     result.whiteId,
     result.blackRating,
     result.blackId,
+  );
+  eloApplyDurationSeconds.observe(
+    { result: 'applied' },
+    Number(process.hrtime.bigint() - start) / 1e9,
   );
   return result;
 }

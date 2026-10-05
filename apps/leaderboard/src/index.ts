@@ -16,10 +16,21 @@ const app = Fastify({
   logger: { name: SERVICE, level: config.LOG_LEVEL },
   genReqId: createGenReqId(),
 });
-registerObservability(app);
 
 const db = createDb(config.DATABASE_URL);
 const redis = createRedis(config.REDIS_URL);
+
+registerObservability(app, {
+  ready: async () => {
+    try {
+      await db.pool.query('SELECT 1');
+      await redis.ping();
+      return true;
+    } catch {
+      return false;
+    }
+  },
+});
 
 let sweeper: Sweeper | undefined;
 
