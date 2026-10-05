@@ -3,6 +3,8 @@
 // by `prom-client` out of the box.
 import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
 
+export { Counter, Gauge, Histogram } from 'prom-client';
+
 export const registry = new Registry();
 collectDefaultMetrics({ register: registry });
 
