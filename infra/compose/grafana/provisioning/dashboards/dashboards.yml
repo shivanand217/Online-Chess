@@ -1,0 +1,13 @@
+# Point Grafana at the dashboard JSON folder mounted into the container so each file in there is auto-
+# registered and auto-reloaded (10s interval) during development.
+apiVersion: 1
+
+providers:
+  - name: chess
+    orgId: 1
+    folder: Chess
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    options:
+      path: /var/lib/grafana/dashboards
