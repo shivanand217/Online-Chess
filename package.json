@@ -18,7 +18,7 @@
     "format:check": "prettier --check .",
     "stack:up": "docker compose -f infra/compose/docker-compose.yml up -d",
     "stack:up:obs": "docker compose -f infra/compose/docker-compose.yml --profile observability up -d",
-    "stack:down": "docker compose -f infra/compose/docker-compose.yml down",
+    "stack:down": "docker compose -f infra/compose/docker-compose.yml --profile observability down --remove-orphans",
     "prepare": "lefthook install || true"
   },
   "devDependencies": {
