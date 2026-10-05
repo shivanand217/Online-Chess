@@ -5,6 +5,7 @@ import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { createRegistry } from '@chess/registry';
 import { createGenReqId, installGracefulShutdown, registerObservability } from '@chess/telemetry';
+import { ringMembers } from './metrics.js';
 import { HashRing, type RingNode } from './ring.js';
 import { registerRoutes, type RingHolder } from './routes.js';
 
@@ -34,6 +35,7 @@ app
     await registry.watch(GAME_SERVERS_PREFIX, (members) => {
       const nodes: RingNode[] = [...members].map(([id, value]) => ({ id, value }));
       holder.current = new HashRing(nodes);
+      ringMembers.set(nodes.length);
       app.log.info({ members: nodes.map((n) => n.id) }, 'ring updated');
     });
     app.log.info({ addr }, `${SERVICE} listening`);
