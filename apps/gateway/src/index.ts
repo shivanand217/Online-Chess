@@ -16,12 +16,22 @@ const app = Fastify({
   logger: { name: SERVICE, level: config.LOG_LEVEL },
   genReqId: createGenReqId(),
 });
-registerObservability(app);
 
 const db = createDb(config.DATABASE_URL);
 const subscriber = await createMatchSubscriber(config.REDIS_URL);
 const matchmaker = createMatchmakerClient(config.MATCHMAKER_URL);
 const router = createRouterClient(config.SESSION_ROUTER_URL);
+
+registerObservability(app, {
+  ready: async () => {
+    try {
+      await db.pool.query('SELECT 1');
+      return true;
+    } catch {
+      return false;
+    }
+  },
+});
 
 app.addHook('onClose', async () => {
   await subscriber.stop();

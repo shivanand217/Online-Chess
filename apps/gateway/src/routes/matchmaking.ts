@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { MatchmakingRequest, type MatchmakingResponse } from '@chess/protocol';
 import type { MatchSubscriber } from '../match-subscriber.js';
 import type { MatchmakerClient } from '../matchmaker-client.js';
+import { matchmakingOutcomes } from '../metrics.js';
 import type { RouterClient } from '../router-client.js';
 
 export interface MatchmakingDeps {
@@ -44,6 +45,7 @@ export function registerMatchmakingRoute(app: FastifyInstance, deps: Matchmaking
       });
     } catch (err) {
       req.log.error({ err, requestId }, 'enqueue failed');
+      matchmakingOutcomes.inc({ outcome: 'enqueue_error' });
       reply.code(502);
       return { error: 'matchmaker_unavailable' };
     }
@@ -52,6 +54,7 @@ export function registerMatchmakingRoute(app: FastifyInstance, deps: Matchmaking
 
     if (!result || result.type === 'expired') {
       await deps.matchmaker.cancel(requestId);
+      matchmakingOutcomes.inc({ outcome: result ? 'expired' : 'timeout' });
       reply.code(408);
       return { error: 'match_timeout' };
     }
@@ -64,6 +67,7 @@ export function registerMatchmakingRoute(app: FastifyInstance, deps: Matchmaking
       timeControl: result.timeControl,
       ...(route ? { wsUrl: route.wsUrl } : {}),
     };
+    matchmakingOutcomes.inc({ outcome: 'matched' });
     return response;
   });
 }
