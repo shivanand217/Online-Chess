@@ -4,7 +4,12 @@ import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { createDb, getPlayer } from '@chess/db';
 import { createRedis } from '@chess/redis';
-import { createGenReqId, installGracefulShutdown, registerObservability } from '@chess/telemetry';
+import {
+  createGenReqId,
+  installGracefulShutdown,
+  registerObservability,
+  pinoTraceMixin,
+} from '@chess/telemetry';
 import { registerClaimScript } from './claim.js';
 import { startSweeper, type Sweeper } from './loop.js';
 import type { ResolvePlayer } from './notify.js';
@@ -14,7 +19,7 @@ const SERVICE = 'matchmaker';
 const config = loadConfig();
 
 const app = Fastify({
-  logger: { name: SERVICE, level: config.LOG_LEVEL },
+  logger: { name: SERVICE, level: config.LOG_LEVEL, mixin: pinoTraceMixin },
   genReqId: createGenReqId(),
 });
 const redis = createRedis(config.REDIS_URL);

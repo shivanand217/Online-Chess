@@ -4,7 +4,12 @@ import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { createDb } from '@chess/db';
 import { createRedis } from '@chess/redis';
-import { createGenReqId, installGracefulShutdown, registerObservability } from '@chess/telemetry';
+import {
+  createGenReqId,
+  installGracefulShutdown,
+  registerObservability,
+  pinoTraceMixin,
+} from '@chess/telemetry';
 import { reconcile } from './reconcile.js';
 import { registerRoutes } from './routes.js';
 import { startSweeper, type Sweeper } from './sweeper.js';
@@ -13,7 +18,7 @@ const SERVICE = 'leaderboard';
 const config = loadConfig();
 
 const app = Fastify({
-  logger: { name: SERVICE, level: config.LOG_LEVEL },
+  logger: { name: SERVICE, level: config.LOG_LEVEL, mixin: pinoTraceMixin },
   genReqId: createGenReqId(),
 });
 

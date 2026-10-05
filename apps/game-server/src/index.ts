@@ -6,7 +6,12 @@ import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { createDb } from '@chess/db';
 import { createRegistry } from '@chess/registry';
-import { createGenReqId, installGracefulShutdown, registerObservability } from '@chess/telemetry';
+import {
+  createGenReqId,
+  installGracefulShutdown,
+  registerObservability,
+  pinoTraceMixin,
+} from '@chess/telemetry';
 import { SessionManager } from './sessions.js';
 import { WsHub } from './ws.js';
 
@@ -16,7 +21,7 @@ const GAME_SERVERS_PREFIX = '/chess/game-servers/';
 const config = loadConfig();
 
 const app = Fastify({
-  logger: { name: SERVICE, level: config.LOG_LEVEL },
+  logger: { name: SERVICE, level: config.LOG_LEVEL, mixin: pinoTraceMixin },
   genReqId: createGenReqId(),
 });
 

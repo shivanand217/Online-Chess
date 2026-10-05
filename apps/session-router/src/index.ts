@@ -4,7 +4,12 @@
 import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { createRegistry } from '@chess/registry';
-import { createGenReqId, installGracefulShutdown, registerObservability } from '@chess/telemetry';
+import {
+  createGenReqId,
+  installGracefulShutdown,
+  registerObservability,
+  pinoTraceMixin,
+} from '@chess/telemetry';
 import { ringMembers } from './metrics.js';
 import { HashRing, type RingNode } from './ring.js';
 import { registerRoutes, type RingHolder } from './routes.js';
@@ -14,7 +19,7 @@ const config = loadConfig();
 const GAME_SERVERS_PREFIX = '/chess/game-servers/';
 
 const app = Fastify({
-  logger: { name: SERVICE, level: config.LOG_LEVEL },
+  logger: { name: SERVICE, level: config.LOG_LEVEL, mixin: pinoTraceMixin },
   genReqId: createGenReqId(),
 });
 registerObservability(app);

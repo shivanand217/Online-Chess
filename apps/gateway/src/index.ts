@@ -2,7 +2,12 @@
 import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { createDb } from '@chess/db';
-import { createGenReqId, installGracefulShutdown, registerObservability } from '@chess/telemetry';
+import {
+  createGenReqId,
+  installGracefulShutdown,
+  registerObservability,
+  pinoTraceMixin,
+} from '@chess/telemetry';
 import { createMatchSubscriber } from './match-subscriber.js';
 import { createMatchmakerClient } from './matchmaker-client.js';
 import { createRouterClient } from './router-client.js';
@@ -13,7 +18,7 @@ const SERVICE = 'gateway';
 const config = loadConfig();
 
 const app = Fastify({
-  logger: { name: SERVICE, level: config.LOG_LEVEL },
+  logger: { name: SERVICE, level: config.LOG_LEVEL, mixin: pinoTraceMixin },
   genReqId: createGenReqId(),
 });
 

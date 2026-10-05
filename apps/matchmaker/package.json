@@ -11,9 +11,9 @@
     "./claim": "./src/claim.ts"
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --import ./src/tracing.ts src/index.ts",
     "build": "tsup",
-    "start": "node dist/index.js",
+    "start": "node --import ./dist/tracing.js dist/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
