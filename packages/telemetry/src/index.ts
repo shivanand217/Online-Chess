@@ -8,6 +8,7 @@ import { httpRequestDuration, httpRequests, registry } from './metrics.js';
 
 export type { Logger };
 export * from './metrics.js';
+export * from './tracing.js';
 
 /** Named structured logger for non-HTTP contexts (background workers, scripts). */
 export function createLogger(name: string, level = 'info'): Logger {
