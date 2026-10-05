@@ -8,6 +8,7 @@ import type { Database } from '@chess/db';
 import type { MatchExpired } from '@chess/protocol';
 import { tryClaim } from './claim.js';
 import { matchChannel, requestKey } from './keys.js';
+import { matchmakingPoolSize } from './metrics.js';
 import { notifyPairing, type ResolvePlayer } from './notify.js';
 import { getWaiter } from './pool.js';
 import { DEFAULT_WIDEN, isExpired, windowFor, type WidenConfig } from './widen.js';
@@ -53,6 +54,7 @@ export async function tick(deps: SweeperDeps): Promise<TickStats> {
     stats.pools += 1;
     const timeControl = timeControlFromPoolKey(key);
     const members = await deps.redis.zrange(key, 0, -1);
+    matchmakingPoolSize.set({ timeControl }, members.length);
 
     for (const requestId of members) {
       const waiter = await getWaiter(deps.redis, requestId);

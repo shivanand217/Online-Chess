@@ -6,6 +6,7 @@ import { createGame, type Database } from '@chess/db';
 import { parseTimeControl } from '@chess/domain';
 import type { MatchNotification } from '@chess/protocol';
 import { matchChannel, requestKey } from './keys.js';
+import { matchmakingWaitSeconds } from './metrics.js';
 import { getWaiter, type WaiterMetadata } from './pool.js';
 
 export interface PlayerLookup {
@@ -97,6 +98,16 @@ export async function notifyPairing(
     redis.publish(matchChannel(params.peerRequestId), JSON.stringify(peerMsg)),
   ]);
   await redis.del(requestKey(params.callerRequestId), requestKey(params.peerRequestId));
+
+  const now = Date.now();
+  matchmakingWaitSeconds.observe(
+    { timeControl: callerWaiter.timeControl },
+    Math.max(0, (now - callerWaiter.enqueuedAt) / 1000),
+  );
+  matchmakingWaitSeconds.observe(
+    { timeControl: peerWaiter.timeControl },
+    Math.max(0, (now - peerWaiter.enqueuedAt) / 1000),
+  );
 
   return { gameId: game.gameId, caller: callerMsg, peer: peerMsg };
 }

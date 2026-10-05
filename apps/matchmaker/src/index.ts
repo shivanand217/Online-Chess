@@ -17,11 +17,21 @@ const app = Fastify({
   logger: { name: SERVICE, level: config.LOG_LEVEL },
   genReqId: createGenReqId(),
 });
-registerObservability(app);
-
 const redis = createRedis(config.REDIS_URL);
 const db = createDb(config.DATABASE_URL);
 registerClaimScript(redis);
+
+registerObservability(app, {
+  ready: async () => {
+    try {
+      await db.pool.query('SELECT 1');
+      await redis.ping();
+      return true;
+    } catch {
+      return false;
+    }
+  },
+});
 
 const resolvePlayer: ResolvePlayer = async (playerId) => {
   const row = await getPlayer(db.db, playerId);
