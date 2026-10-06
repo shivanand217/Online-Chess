@@ -5,3 +5,6 @@
 pnpm-lock.yaml
 # drizzle-kit's generated migration folders — the tool owns their formatting.
 packages/db/drizzle/**
+# Dockerfiles don't have a prettier parser; they're hand-managed.
+**/Dockerfile
+.dockerignore

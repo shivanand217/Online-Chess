@@ -19,6 +19,7 @@
     "stack:up": "docker compose -f infra/compose/docker-compose.yml up -d",
     "stack:up:obs": "docker compose -f infra/compose/docker-compose.yml --profile observability up -d",
     "stack:down": "docker compose -f infra/compose/docker-compose.yml --profile observability down --remove-orphans",
+    "docker:build": "for s in gateway matchmaker session-router game-server leaderboard; do docker build -f apps/$s/Dockerfile -t chess/$s:dev . || exit 1; done",
     "prepare": "lefthook install || true"
   },
   "devDependencies": {

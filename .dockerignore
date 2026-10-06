@@ -1,0 +1,12 @@
+# Keep docker build contexts small: don't ship node_modules, build output, or local tool caches.
+# The build stage reinstalls deps from pnpm-lock.yaml, so a fresh node_modules is deterministic.
+**/node_modules
+**/dist
+**/.turbo
+.git
+.github
+docs
+infra/compose/grafana/dashboards
+# Logs, tmp files
+**/*.log
+.DS_Store
