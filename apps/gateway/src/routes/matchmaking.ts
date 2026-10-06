@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { MatchmakingRequest, type MatchmakingResponse } from '@chess/protocol';
+import { requireAuth } from '../auth.js';
 import type { MatchSubscriber } from '../match-subscriber.js';
 import type { MatchmakerClient } from '../matchmaker-client.js';
 import { matchmakingOutcomes } from '../metrics.js';
@@ -22,17 +23,13 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 export function registerMatchmakingRoute(app: FastifyInstance, deps: MatchmakingDeps): void {
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  app.post('/matchmaking', async (req, reply) => {
+  app.post('/matchmaking', { preHandler: requireAuth() }, async (req, reply) => {
     const parsed = MatchmakingRequest.safeParse(req.body);
     if (!parsed.success) {
       reply.code(400);
       return { error: 'invalid_request', details: parsed.error.flatten() };
     }
-    const playerId = req.headers['x-player-id'];
-    if (typeof playerId !== 'string' || playerId.length === 0) {
-      reply.code(401);
-      return { error: 'missing_player_id' };
-    }
+    const playerId = req.user.sub;
 
     const requestId = randomUUID();
     const pending = deps.subscriber.waitFor(requestId, timeoutMs);

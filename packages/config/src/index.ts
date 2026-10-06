@@ -21,6 +21,12 @@ const EnvSchema = z.object({
 
   // Game server advertises this URL to etcd so the session router (and clients, via it) can reach it.
   GAME_SERVER_PUBLIC_URL: z.string().default('ws://localhost:3003'),
+
+  // Secret used to sign + verify the gateway's JWTs. The dev default MUST be overridden in any
+  // deployment the open internet can see.
+  JWT_SECRET: z.string().min(16).default('dev-secret-change-me-in-production'),
+  /** Lifetime of a freshly minted token. Suffixed with a unit per `@fastify/jwt`'s conventions. */
+  JWT_EXPIRES_IN: z.string().default('12h'),
 });
 
 export type Config = z.infer<typeof EnvSchema>;

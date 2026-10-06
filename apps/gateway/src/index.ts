@@ -8,6 +8,7 @@ import {
   registerObservability,
   pinoTraceMixin,
 } from '@chess/telemetry';
+import { registerAuth } from './auth.js';
 import { createMatchSubscriber } from './match-subscriber.js';
 import { createMatchmakerClient } from './matchmaker-client.js';
 import { createRouterClient } from './router-client.js';
@@ -44,6 +45,11 @@ app.addHook('onClose', async () => {
 });
 installGracefulShutdown(app, app.log);
 
+await registerAuth(app, {
+  db: db.db,
+  secret: config.JWT_SECRET,
+  expiresIn: config.JWT_EXPIRES_IN,
+});
 registerMatchmakingRoute(app, { subscriber, matchmaker, router });
 registerGamesRoute(app, { db: db.db, router });
 

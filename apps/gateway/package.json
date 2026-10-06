@@ -18,6 +18,7 @@
     "@chess/protocol": "workspace:*",
     "@chess/redis": "workspace:*",
     "@chess/telemetry": "workspace:*",
+    "@fastify/jwt": "^9.0.3",
     "fastify": "^5.2.0",
     "ioredis": "^5.4.2"
   },

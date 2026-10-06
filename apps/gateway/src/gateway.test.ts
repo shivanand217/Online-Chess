@@ -19,6 +19,7 @@ import { registerClaimScript } from '@chess/matchmaker/claim';
 import { startSweeper, type Sweeper } from '@chess/matchmaker/loop';
 import type { ResolvePlayer } from '@chess/matchmaker/notify';
 import { registerRoutes as registerMatchmakerRoutes } from '@chess/matchmaker/routes';
+import { registerAuth } from './auth.js';
 import { createMatchSubscriber, type MatchSubscriber } from './match-subscriber.js';
 import { createMatchmakerClient } from './matchmaker-client.js';
 import { createRouterClient } from './router-client.js';
@@ -102,6 +103,11 @@ beforeAll(async () => {
   const router = createRouterClient(routerAddr);
 
   gatewayApp = Fastify({ logger: false });
+  await registerAuth(gatewayApp, {
+    db: db.db,
+    secret: 'test-secret-16-chars-min',
+    expiresIn: '1h',
+  });
   registerMatchmakingRoute(gatewayApp, { subscriber, matchmaker, router, timeoutMs: 2_000 });
   registerGamesRoute(gatewayApp, { db: db.db, router });
   gatewayUrl = await gatewayApp.listen({ port: 0, host: '127.0.0.1' });
@@ -124,10 +130,25 @@ afterEach(async () => {
   await redis.flushall();
 });
 
+async function mintToken(playerId: string): Promise<string> {
+  const res = await fetch(`${gatewayUrl}/auth/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ playerId }),
+  });
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { token: string };
+  return body.token;
+}
+
 async function postMatchmaking(playerId: string, timeControl = 'blitz-3-2'): Promise<Response> {
+  const token = await mintToken(playerId);
   return fetch(`${gatewayUrl}/matchmaking`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-player-id': playerId },
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({ timeControl }),
   });
 }
@@ -162,7 +183,7 @@ describe('POST /matchmaking (end-to-end)', () => {
     expect(res.status).toBe(408);
   });
 
-  it('rejects a request missing x-player-id with 401', async () => {
+  it('rejects a request with no Authorization header (401)', async () => {
     const res = await fetch(`${gatewayUrl}/matchmaking`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -171,12 +192,63 @@ describe('POST /matchmaking (end-to-end)', () => {
     expect(res.status).toBe(401);
   });
 
-  it('rejects a malformed body with 400', async () => {
-    const player = await insertPlayer(db.db, { username: `bad-${randomUUID()}`, rating: 1500 });
+  it('rejects a bogus token (401)', async () => {
     const res = await fetch(`${gatewayUrl}/matchmaking`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-player-id': player.playerId },
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer not.a.jwt',
+      },
+      body: JSON.stringify({ timeControl: 'blitz-3-2' }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a malformed body with 400', async () => {
+    const player = await insertPlayer(db.db, { username: `bad-${randomUUID()}`, rating: 1500 });
+    const token = await mintToken(player.playerId);
+    const res = await fetch(`${gatewayUrl}/matchmaking`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({ wrong: 'shape' }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /auth/token', () => {
+  it('mints a JWT for a known playerId', async () => {
+    const player = await insertPlayer(db.db, { username: `auth-${randomUUID()}`, rating: 1500 });
+    const res = await fetch(`${gatewayUrl}/auth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ playerId: player.playerId }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { token: string; playerId: string; username: string };
+    expect(body.playerId).toBe(player.playerId);
+    expect(body.username).toBe(player.username);
+    // A JWT is three base64url segments separated by dots.
+    expect(body.token.split('.')).toHaveLength(3);
+  });
+
+  it('404s for an unknown playerId', async () => {
+    const res = await fetch(`${gatewayUrl}/auth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ playerId: randomUUID() }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('400s on malformed body', async () => {
+    const res = await fetch(`${gatewayUrl}/auth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ nope: true }),
     });
     expect(res.status).toBe(400);
   });
