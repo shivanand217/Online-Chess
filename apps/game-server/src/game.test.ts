@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import Fastify, { type FastifyInstance } from 'fastify';
+import jwt from 'jsonwebtoken';
 import { WebSocket } from 'ws';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import {
@@ -18,8 +19,13 @@ import {
 } from '@chess/db';
 import type { ServerMessage } from '@chess/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createTokenVerifier } from './auth.js';
 import { SessionManager } from './sessions.js';
 import { WsHub } from './ws.js';
+
+const JWT_SECRET = 'test-secret-16-chars-min';
+const tokenFor = (playerId: string): string =>
+  jwt.sign({ sub: playerId }, JWT_SECRET, { algorithm: 'HS256', expiresIn: '1h' });
 
 let pg: StartedPostgreSqlContainer;
 let db: DbHandle;
@@ -32,7 +38,7 @@ beforeAll(async () => {
   db = createDb(pg.getConnectionUri());
   await runMigrations(db.db);
   const sessions = new SessionManager(db.db);
-  hub = new WsHub({ db: db.db, sessions });
+  hub = new WsHub({ db: db.db, sessions, verifyToken: createTokenVerifier(JWT_SECRET) });
 
   app = Fastify({ logger: false });
   await app.listen({ port: 0, host: '127.0.0.1' });
@@ -57,7 +63,7 @@ interface Client {
 
 async function connect(gameId: string, playerId: string): Promise<Client> {
   const ws = new WebSocket(`${baseUrl}/ws/games/${gameId}`, {
-    headers: { 'x-player-id': playerId },
+    headers: { authorization: `Bearer ${tokenFor(playerId)}` },
   });
   const queue: ServerMessage[] = [];
   const waiters: Array<(msg: ServerMessage) => void> = [];
@@ -195,7 +201,7 @@ describe('game-server WS', () => {
     const { game } = await seedGame();
     const stranger = randomUUID();
     const ws = new WebSocket(`${baseUrl}/ws/games/${game.gameId}`, {
-      headers: { 'x-player-id': stranger },
+      headers: { authorization: `Bearer ${tokenFor(stranger)}` },
     });
     const code = await new Promise<number | undefined>((resolve, reject) => {
       ws.once('error', () => resolve(undefined));
@@ -203,6 +209,46 @@ describe('game-server WS', () => {
       ws.once('open', () => reject(new Error('unexpected open')));
     });
     expect(code).toBe(403);
+  });
+
+  it('rejects an upgrade with no token (401)', async () => {
+    const { game } = await seedGame();
+    const ws = new WebSocket(`${baseUrl}/ws/games/${game.gameId}`);
+    const code = await new Promise<number | undefined>((resolve, reject) => {
+      ws.once('error', () => resolve(undefined));
+      ws.once('unexpected-response', (_req, res) => resolve(res.statusCode));
+      ws.once('open', () => reject(new Error('unexpected open')));
+    });
+    expect(code).toBe(401);
+  });
+
+  it('rejects an upgrade signed with the wrong secret (401)', async () => {
+    const { white, game } = await seedGame();
+    const forged = jwt.sign({ sub: white.playerId }, 'other-secret-16-chars', {
+      algorithm: 'HS256',
+    });
+    const ws = new WebSocket(`${baseUrl}/ws/games/${game.gameId}`, {
+      headers: { authorization: `Bearer ${forged}` },
+    });
+    const code = await new Promise<number | undefined>((resolve, reject) => {
+      ws.once('error', () => resolve(undefined));
+      ws.once('unexpected-response', (_req, res) => resolve(res.statusCode));
+      ws.once('open', () => reject(new Error('unexpected open')));
+    });
+    expect(code).toBe(401);
+  });
+
+  it('accepts a token passed via ?token= query (browser path)', async () => {
+    const { white, game } = await seedGame();
+    const ws = new WebSocket(
+      `${baseUrl}/ws/games/${game.gameId}?token=${encodeURIComponent(tokenFor(white.playerId))}`,
+    );
+    await new Promise<void>((resolve, reject) => {
+      ws.once('open', () => resolve());
+      ws.once('error', reject);
+      ws.once('unexpected-response', (_req, res) => reject(new Error(`http ${res.statusCode}`)));
+    });
+    ws.close();
   });
 
   it('resign ends the game and persists', async () => {
