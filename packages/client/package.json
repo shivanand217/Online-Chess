@@ -1,0 +1,22 @@
+{
+  "//": "Typed SDK over the gateway REST + game-server WS. Isomorphic (browser + Node 22) — zero runtime deps beyond native fetch and WebSocket.",
+  "name": "@chess/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@chess/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "ws": "^8.18.0"
+  }
+}
