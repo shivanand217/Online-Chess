@@ -8,17 +8,22 @@ import { GameSession, type GameEvent, type WebSocketCtor } from './game-session.
 let wss: WebSocketServer;
 let port: number;
 let serverFrames: unknown[];
-let lastUpgradeHeaders: Record<string, string | undefined>;
+interface UpgradeSnapshot {
+  authorization: string | undefined;
+  tokenParam: string | undefined;
+}
+let lastUpgrade: UpgradeSnapshot;
 
 beforeEach(() => {
   serverFrames = [];
-  lastUpgradeHeaders = {};
+  lastUpgrade = { authorization: undefined, tokenParam: undefined };
   wss = new WebSocketServer({ port: 0 });
   port = (wss.address() as AddressInfo).port;
   wss.on('connection', (socket, req) => {
-    lastUpgradeHeaders = {
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    lastUpgrade = {
       authorization: req.headers['authorization'] as string | undefined,
-      'x-player-id': req.headers['x-player-id'] as string | undefined,
+      tokenParam: url.searchParams.get('token') ?? undefined,
     };
     socket.send(
       JSON.stringify({
@@ -140,11 +145,11 @@ describe('GameSession', () => {
     expect(closed).toBeDefined();
   });
 
-  it('forwards x-player-id + Bearer token on the upgrade (Node path)', async () => {
+  it('carries the token both as ?token= (browser-safe) and Authorization header (Node)', async () => {
     const { session, events } = connect();
     await waitFor(events, (e) => e.some((x) => x.type === 'state'));
-    expect(lastUpgradeHeaders.authorization).toBe('Bearer bearer.tok');
-    expect(lastUpgradeHeaders['x-player-id']).toBe('11111111-1111-1111-1111-111111111111');
+    expect(lastUpgrade.tokenParam).toBe('bearer.tok');
+    expect(lastUpgrade.authorization).toBe('Bearer bearer.tok');
     session.close();
   });
 });

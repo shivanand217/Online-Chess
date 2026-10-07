@@ -60,11 +60,14 @@ export class GameSession {
 
   constructor(opts: ConnectOpts) {
     const WS: WebSocketCtor = opts.webSocketImpl ?? (WebSocket as unknown as WebSocketCtor);
-    // Node tests get real headers via the `ws` package's third arg; browsers ignore it silently and
-    // we rely on the server accepting the query-param fallback (gap tracked separately).
-    const url = `${opts.wsUrl.replace(/\/+$/, '')}/ws/games/${encodeURIComponent(opts.gameId)}`;
+    // Browsers can't send custom headers on a WebSocket handshake, so the token always rides on the URL.
+    // Node tests additionally pass an Authorization header via the `ws` third arg — the game-server
+    // accepts either, prefers the header.
+    const url =
+      `${opts.wsUrl.replace(/\/+$/, '')}/ws/games/${encodeURIComponent(opts.gameId)}` +
+      `?token=${encodeURIComponent(opts.token)}`;
     this.ws = new WS(url, [], {
-      headers: { 'x-player-id': opts.playerId, authorization: `Bearer ${opts.token}` },
+      headers: { authorization: `Bearer ${opts.token}` },
     });
 
     this.ws.addEventListener('message', (ev) => this.onFrame(ev.data));
