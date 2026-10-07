@@ -1,0 +1,10 @@
+// TypeScript config for @chess/client; extends the workspace base.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "lib": ["ES2023", "DOM"]
+  },
+  "include": ["src"]
+}
