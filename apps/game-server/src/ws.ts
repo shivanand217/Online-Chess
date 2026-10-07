@@ -8,6 +8,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { IllegalMoveError } from '@chess/chess-engine';
 import { appendMove, finishGame, getMoves, type Database } from '@chess/db';
 import { ClientMessage, type ServerMessage } from '@chess/protocol';
+import type { TokenVerifier } from './auth.js';
 import { FlagTimers } from './flag-timer.js';
 import { liveConnections, moveLatencySeconds, movesTotal, rttCreditMsTotal } from './metrics.js';
 import { RttTracker, creditFromMedian } from './rtt-tracker.js';
@@ -19,6 +20,8 @@ import type { Result } from '@chess/chess-engine';
 export interface WsDeps {
   db: Database;
   sessions: SessionManager;
+  /** Verifies the JWT on every upgrade and returns the authenticated playerId. */
+  verifyToken: TokenVerifier;
   /** How often to ping each live connection to sample RTT. */
   pingIntervalMs?: number;
   /** Hard ceiling on the credit we give a mover for RTT compensation (ms). */
@@ -85,15 +88,15 @@ export class WsHub {
     head: Buffer,
   ): Promise<void> {
     const match = /^\/ws\/games\/([0-9a-f-]{36})(?:\?|$)/.exec(req.url ?? '');
-    const playerId = req.headers['x-player-id'];
-    if (!match || typeof playerId !== 'string' || playerId.length === 0) {
+    const gameId = match?.[1];
+    if (!gameId) {
       socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
       socket.destroy();
       return;
     }
-    const gameId = match[1];
-    if (!gameId) {
-      socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+    const verified = this.deps.verifyToken(req);
+    if (!verified) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
       return;
     }
@@ -103,7 +106,7 @@ export class WsHub {
       socket.destroy();
       return;
     }
-    const color = session.colorOf(playerId);
+    const color = session.colorOf(verified.playerId);
     if (!color) {
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
       socket.destroy();
@@ -111,7 +114,7 @@ export class WsHub {
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      this.onJoin(session, playerId, ws);
+      this.onJoin(session, verified.playerId, ws);
     });
   }
 

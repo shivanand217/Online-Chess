@@ -12,6 +12,7 @@ import {
   registerObservability,
   pinoTraceMixin,
 } from '@chess/telemetry';
+import { createTokenVerifier } from './auth.js';
 import { SessionManager } from './sessions.js';
 import { WsHub } from './ws.js';
 
@@ -27,7 +28,11 @@ const app = Fastify({
 
 const db = createDb(config.DATABASE_URL);
 const sessions = new SessionManager(db.db);
-const hub = new WsHub({ db: db.db, sessions });
+const hub = new WsHub({
+  db: db.db,
+  sessions,
+  verifyToken: createTokenVerifier(config.JWT_SECRET),
+});
 const registry = createRegistry({ hosts: config.ETCD_HOSTS });
 
 registerObservability(app, {
