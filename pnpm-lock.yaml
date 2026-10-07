@@ -221,6 +221,19 @@ importers:
         specifier: ^1.0.0-beta.8
         version: 1.4.0
 
+  packages/client:
+    dependencies:
+      '@chess/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.2
+      ws:
+        specifier: ^8.18.0
+        version: 8.22.0
+
   packages/config:
     dependencies:
       zod:
