@@ -45,6 +45,9 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     const { requestId } = req.params;
     const waiter = await getWaiter(deps.redis, requestId);
     if (!waiter) {
+      // 204 (not 404) so the sweeper-vs-cancel race — the gateway's 15s timer firing just after the
+      // sweeper has already expired the same waiter — doesn't drown out real errors. The caller's
+      // intent ("make sure this isn't in the pool") is already satisfied.
       reply.code(204);
       return null;
     }
