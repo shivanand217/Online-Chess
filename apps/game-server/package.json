@@ -21,10 +21,12 @@
     "@chess/registry": "workspace:*",
     "@chess/telemetry": "workspace:*",
     "fastify": "^5.2.0",
+    "jsonwebtoken": "^9.0.2",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^10.16.0",
+    "@types/jsonwebtoken": "^9.0.7",
     "@types/ws": "^8.5.13",
     "testcontainers": "^10.16.0"
   }
