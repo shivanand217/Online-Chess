@@ -3,6 +3,7 @@
 // Run with `pnpm --filter @chess/db db:seed` (honours DATABASE_URL and SEED_COUNT).
 import { pathToFileURL } from 'node:url';
 import { createDb, type Database } from './client.js';
+import { hashPassword } from './password.js';
 import { players } from './schema.js';
 
 const MEAN_RATING = 1500;
@@ -14,6 +15,9 @@ export interface SeedPlayer {
   username: string;
   rating: number;
 }
+
+/** Deterministic dev password: every seeded `player_000NNN` logs in with `pw_player_000NNN`. */
+export const seedPasswordFor = (username: string): string => `pw_${username}`;
 
 /** Standard-normal sample via Box–Muller. */
 function standardNormal(): number {
@@ -36,11 +40,18 @@ export function makePlayers(count: number, startIndex = 0): SeedPlayer[] {
 
 export async function seedPlayers(db: Database, count: number, chunkSize = 1000): Promise<number> {
   const rows = makePlayers(count);
+  // Hashing is slow by design (~100ms each at cost 10); do it in parallel but one chunk at a time to
+  // avoid a 10 000-wide concurrent hash on a laptop.
   for (let i = 0; i < rows.length; i += chunkSize) {
-    await db
-      .insert(players)
-      .values(rows.slice(i, i + chunkSize))
-      .onConflictDoNothing();
+    const slice = rows.slice(i, i + chunkSize);
+    const hashed = await Promise.all(
+      slice.map(async (r) => ({
+        username: r.username,
+        rating: r.rating,
+        passwordHash: await hashPassword(seedPasswordFor(r.username)),
+      })),
+    );
+    await db.insert(players).values(hashed).onConflictDoNothing();
   }
   return rows.length;
 }
