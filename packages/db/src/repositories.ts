@@ -23,6 +23,14 @@ export async function getPlayer(db: Database, playerId: string): Promise<Player 
   return rows[0];
 }
 
+export async function getPlayerByUsername(
+  db: Database,
+  username: string,
+): Promise<Player | undefined> {
+  const rows = await db.select().from(players).where(eq(players.username, username)).limit(1);
+  return rows[0];
+}
+
 // --- games -------------------------------------------------------------------------------------------
 
 export async function createGame(db: Database, game: NewGame): Promise<Game> {
