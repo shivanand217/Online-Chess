@@ -16,11 +16,13 @@
     "db:seed": "tsx src/seed.ts"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.38.3",
     "pg": "^8.13.1"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^10.16.0",
+    "@types/bcryptjs": "^2.4.6",
     "@types/pg": "^8.11.10",
     "drizzle-kit": "^0.30.1"
   }
