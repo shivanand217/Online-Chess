@@ -37,7 +37,9 @@ export class ChessHttpClient {
 
   constructor(opts: HttpOptions) {
     this.root = opts.gatewayUrl.replace(/\/+$/, '');
-    this.fetchImpl = opts.fetchImpl ?? fetch;
+    // Browsers' `fetch` requires `this === window`; storing it as a class property and calling it as
+    // `this.fetchImpl(...)` breaks that binding. `.bind(globalThis)` is the standard fix.
+    this.fetchImpl = opts.fetchImpl ?? fetch.bind(globalThis);
   }
 
   /** The currently authenticated session, if any. */
@@ -50,15 +52,28 @@ export class ChessHttpClient {
     this.session = session;
   }
 
-  /** Mint a dev-mode token for a known playerId. Will be replaced by password login later. */
-  async login(playerId: string): Promise<AuthSession> {
+  /** Exchange username + password for a JWT. 401 (`AuthError`) on wrong creds or unknown user. */
+  async login(username: string, password: string): Promise<AuthSession> {
     const res = await this.fetchImpl(`${this.root}/auth/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ playerId }),
+      body: JSON.stringify({ username, password }),
     });
-    if (res.status === 404) throw new NotFoundError('player_not_found');
+    if (res.status === 401) throw new AuthError('invalid_credentials');
     if (!res.ok) throw await this.rejectFromResponse(res, 'login_failed');
+    const body = (await res.json()) as TokenResponse;
+    this.session = { token: body.token, playerId: body.playerId, username: body.username };
+    return this.session;
+  }
+
+  /** Create a new player + sign in. 409 (`ChessClientError` with status 409) if the username is taken. */
+  async signup(username: string, password: string): Promise<AuthSession> {
+    const res = await this.fetchImpl(`${this.root}/auth/signup`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!res.ok) throw await this.rejectFromResponse(res, 'signup_failed');
     const body = (await res.json()) as TokenResponse;
     this.session = { token: body.token, playerId: body.playerId, username: body.username };
     return this.session;

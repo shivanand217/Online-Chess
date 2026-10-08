@@ -126,10 +126,11 @@ describe('seedPlayers', () => {
     handle.db.$count(players, like(players.username, 'player_%'));
 
   it('bulk-inserts a seed cohort and is idempotent on re-run', async () => {
-    await seedPlayers(handle.db, 250);
-    expect(await seededCount()).toBe(250);
-    // Re-running seeds the same usernames → onConflictDoNothing holds the count steady.
-    await seedPlayers(handle.db, 250);
-    expect(await seededCount()).toBe(250);
-  });
+    // Smaller than production seed because each row carries a bcrypt hash now (~100ms each).
+    // 50 × 2 passes is enough to prove the ON CONFLICT path keeps the count steady.
+    await seedPlayers(handle.db, 50);
+    expect(await seededCount()).toBe(50);
+    await seedPlayers(handle.db, 50);
+    expect(await seededCount()).toBe(50);
+  }, 30_000);
 });

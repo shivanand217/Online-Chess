@@ -11,9 +11,11 @@ export type TimeControl = z.infer<typeof TimeControl>;
 export const MatchmakingRequest = z.object({ timeControl: TimeControl });
 export type MatchmakingRequest = z.infer<typeof MatchmakingRequest>;
 
-/** Dev login: mint a JWT for a known playerId. Real password-backed login is a follow-up. */
+/** Login — exchange username+password for a JWT. Validation is deliberately lax; signup gates the
+ *  real username shape. 401 on wrong password or unknown username (same code to prevent enumeration). */
 export const TokenRequest = z.object({
-  playerId: z.string().uuid(),
+  username: z.string().min(1).max(128),
+  password: z.string().min(1).max(128),
 });
 export type TokenRequest = z.infer<typeof TokenRequest>;
 
@@ -23,6 +25,17 @@ export const TokenResponse = z.object({
   username: z.string(),
 });
 export type TokenResponse = z.infer<typeof TokenResponse>;
+
+/** Signup — create a new player row with a bcrypt-hashed password, then issue a token. */
+export const SignupRequest = z.object({
+  username: z
+    .string()
+    .min(3)
+    .max(32)
+    .regex(/^[a-zA-Z0-9_-]+$/, 'alphanumeric, underscore, or hyphen only'),
+  password: z.string().min(8).max(128),
+});
+export type SignupRequest = z.infer<typeof SignupRequest>;
 
 /** Gateway → matchmaker RPC when the gateway holds a long-poll on behalf of a client. The gateway owns
  *  the `requestId` so it can subscribe to the match channel before telling the matchmaker to enqueue. */

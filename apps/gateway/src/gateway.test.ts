@@ -6,7 +6,15 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import Redis from 'ioredis';
-import { createDb, getPlayer, insertPlayer, runMigrations, type DbHandle } from '@chess/db';
+import {
+  createDb,
+  getPlayer,
+  hashPassword,
+  insertPlayer,
+  runMigrations,
+  type DbHandle,
+  type Player,
+} from '@chess/db';
 import type { MatchmakingResponse } from '@chess/protocol';
 import { createRegistry, type RegistryClient } from '@chess/registry';
 import { HashRing, type RingNode } from '@chess/session-router/ring';
@@ -130,19 +138,34 @@ afterEach(async () => {
   await redis.flushall();
 });
 
-async function mintToken(playerId: string): Promise<string> {
+/** Seed a player with a known password so later `/auth/token` calls can log them in. */
+async function seedPlayer(prefix: string, rating = 1500): Promise<Player & { password: string }> {
+  const username = `${prefix}-${randomUUID()}`;
+  const password = `pw-${randomUUID()}`;
+  const player = await insertPlayer(db.db, {
+    username,
+    rating,
+    passwordHash: await hashPassword(password),
+  });
+  return { ...player, password };
+}
+
+async function mintToken(username: string, password: string): Promise<string> {
   const res = await fetch(`${gatewayUrl}/auth/token`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ playerId }),
+    body: JSON.stringify({ username, password }),
   });
   expect(res.status).toBe(200);
   const body = (await res.json()) as { token: string };
   return body.token;
 }
 
-async function postMatchmaking(playerId: string, timeControl = 'blitz-3-2'): Promise<Response> {
-  const token = await mintToken(playerId);
+async function postMatchmaking(
+  creds: { username: string; password: string },
+  timeControl = 'blitz-3-2',
+): Promise<Response> {
+  const token = await mintToken(creds.username, creds.password);
   return fetch(`${gatewayUrl}/matchmaking`, {
     method: 'POST',
     headers: {
@@ -155,13 +178,10 @@ async function postMatchmaking(playerId: string, timeControl = 'blitz-3-2'): Pro
 
 describe('POST /matchmaking (end-to-end)', () => {
   it('pairs two concurrent long-polls on the same time control', async () => {
-    const alice = await insertPlayer(db.db, { username: `alice-${randomUUID()}`, rating: 1500 });
-    const bob = await insertPlayer(db.db, { username: `bob-${randomUUID()}`, rating: 1510 });
+    const alice = await seedPlayer('alice', 1500);
+    const bob = await seedPlayer('bob', 1510);
 
-    const [aliceRes, bobRes] = await Promise.all([
-      postMatchmaking(alice.playerId),
-      postMatchmaking(bob.playerId),
-    ]);
+    const [aliceRes, bobRes] = await Promise.all([postMatchmaking(alice), postMatchmaking(bob)]);
 
     expect(aliceRes.status).toBe(200);
     expect(bobRes.status).toBe(200);
@@ -178,8 +198,8 @@ describe('POST /matchmaking (end-to-end)', () => {
   });
 
   it('returns 408 when nobody shows up before the gateway timeout', async () => {
-    const lonely = await insertPlayer(db.db, { username: `lonely-${randomUUID()}`, rating: 1500 });
-    const res = await postMatchmaking(lonely.playerId);
+    const lonely = await seedPlayer('lonely');
+    const res = await postMatchmaking(lonely);
     expect(res.status).toBe(408);
   });
 
@@ -205,8 +225,8 @@ describe('POST /matchmaking (end-to-end)', () => {
   });
 
   it('rejects a malformed body with 400', async () => {
-    const player = await insertPlayer(db.db, { username: `bad-${randomUUID()}`, rating: 1500 });
-    const token = await mintToken(player.playerId);
+    const player = await seedPlayer('bad');
+    const token = await mintToken(player.username, player.password);
     const res = await fetch(`${gatewayUrl}/matchmaking`, {
       method: 'POST',
       headers: {
@@ -220,28 +240,37 @@ describe('POST /matchmaking (end-to-end)', () => {
 });
 
 describe('POST /auth/token', () => {
-  it('mints a JWT for a known playerId', async () => {
-    const player = await insertPlayer(db.db, { username: `auth-${randomUUID()}`, rating: 1500 });
+  it('mints a JWT for a correct username + password', async () => {
+    const player = await seedPlayer('auth');
     const res = await fetch(`${gatewayUrl}/auth/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ playerId: player.playerId }),
+      body: JSON.stringify({ username: player.username, password: player.password }),
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { token: string; playerId: string; username: string };
     expect(body.playerId).toBe(player.playerId);
     expect(body.username).toBe(player.username);
-    // A JWT is three base64url segments separated by dots.
     expect(body.token.split('.')).toHaveLength(3);
   });
 
-  it('404s for an unknown playerId', async () => {
+  it('401s on wrong password (and not 404 — same code as unknown user to prevent enumeration)', async () => {
+    const player = await seedPlayer('wrongpw');
     const res = await fetch(`${gatewayUrl}/auth/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ playerId: randomUUID() }),
+      body: JSON.stringify({ username: player.username, password: 'not-the-right-pw' }),
     });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(401);
+  });
+
+  it('401s on unknown username (same response shape as wrong password)', async () => {
+    const res = await fetch(`${gatewayUrl}/auth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: `ghost-${randomUUID()}`, password: 'any' }),
+    });
+    expect(res.status).toBe(401);
   });
 
   it('400s on malformed body', async () => {
@@ -254,15 +283,53 @@ describe('POST /auth/token', () => {
   });
 });
 
+describe('POST /auth/signup', () => {
+  it('creates a new player and returns a token', async () => {
+    const username = `signup-${randomUUID().slice(0, 8)}`;
+    const res = await fetch(`${gatewayUrl}/auth/signup`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password: 'correct-horse-battery-staple' }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { token: string; username: string };
+    expect(body.username).toBe(username);
+    expect(body.token.split('.')).toHaveLength(3);
+  });
+
+  it('409s when the username is already taken', async () => {
+    // Use a signup-compatible username (within SignupRequest's regex + length) so the dup check wins.
+    const username = `taken_${randomUUID().slice(0, 8)}`;
+    const first = await fetch(`${gatewayUrl}/auth/signup`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password: 'first-password' }),
+    });
+    expect(first.status).toBe(201);
+    const second = await fetch(`${gatewayUrl}/auth/signup`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password: 'another-password' }),
+    });
+    expect(second.status).toBe(409);
+  });
+
+  it('400s on a short password', async () => {
+    const res = await fetch(`${gatewayUrl}/auth/signup`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'alice', password: 'short' }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('GET /games/:id', () => {
   it('returns the game after a successful pairing', async () => {
-    const alice = await insertPlayer(db.db, { username: `alice-${randomUUID()}`, rating: 1500 });
-    const bob = await insertPlayer(db.db, { username: `bob-${randomUUID()}`, rating: 1510 });
+    const alice = await seedPlayer('alice', 1500);
+    const bob = await seedPlayer('bob', 1510);
 
-    const [aliceRes] = await Promise.all([
-      postMatchmaking(alice.playerId),
-      postMatchmaking(bob.playerId),
-    ]);
+    const [aliceRes] = await Promise.all([postMatchmaking(alice), postMatchmaking(bob)]);
     const { gameId } = (await aliceRes.json()) as MatchmakingResponse;
 
     const res = await fetch(`${gatewayUrl}/games/${gameId}`);

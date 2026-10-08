@@ -1,7 +1,7 @@
 // Focused unit tests for the HTTP side — mock fetch so we exercise the SDK's shape, status handling,
 // and error class mapping without standing up the whole service stack.
 import { describe, expect, it, vi } from 'vitest';
-import { AuthError, MatchmakingTimeoutError, NotFoundError } from './errors.js';
+import { AuthError, ChessClientError, MatchmakingTimeoutError, NotFoundError } from './errors.js';
 import { ChessHttpClient } from './http.js';
 
 function mockFetch(responders: Array<(url: string, init: RequestInit) => Response>) {
@@ -17,10 +17,12 @@ const PLAYER = '11111111-1111-1111-1111-111111111111';
 const GAME = '22222222-2222-2222-2222-222222222222';
 
 describe('ChessHttpClient.login', () => {
-  it('posts to /auth/token and stores the session', async () => {
+  it('posts username + password to /auth/token and stores the session', async () => {
     const fetchImpl = mockFetch([
-      (url) => {
+      (url, init) => {
         expect(url).toBe('http://localhost:3000/auth/token');
+        const body = JSON.parse(init.body as string) as { username: string; password: string };
+        expect(body).toEqual({ username: 'alice', password: 's3cret' });
         return new Response(
           JSON.stringify({ token: 'tok.en', playerId: PLAYER, username: 'alice' }),
           { status: 200, headers: { 'content-type': 'application/json' } },
@@ -28,17 +30,45 @@ describe('ChessHttpClient.login', () => {
       },
     ]);
     const c = new ChessHttpClient({ gatewayUrl: 'http://localhost:3000', fetchImpl });
-    const session = await c.login(PLAYER);
+    const session = await c.login('alice', 's3cret');
     expect(session.token).toBe('tok.en');
     expect(c.authSession?.username).toBe('alice');
   });
 
-  it('throws NotFoundError on 404', async () => {
+  it('throws AuthError on 401 (wrong password or unknown user)', async () => {
     const fetchImpl = mockFetch([
-      () => new Response('{"error":"player_not_found"}', { status: 404 }),
+      () => new Response('{"error":"invalid_credentials"}', { status: 401 }),
     ]);
     const c = new ChessHttpClient({ gatewayUrl: 'http://localhost:3000', fetchImpl });
-    await expect(c.login(PLAYER)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(c.login('alice', 'wrong')).rejects.toBeInstanceOf(AuthError);
+  });
+});
+
+describe('ChessHttpClient.signup', () => {
+  it('creates the player, stores the session, returns the token', async () => {
+    const fetchImpl = mockFetch([
+      (url) => {
+        expect(url).toBe('http://localhost:3000/auth/signup');
+        return new Response(
+          JSON.stringify({ token: 'tok.en', playerId: PLAYER, username: 'alice' }),
+          { status: 201, headers: { 'content-type': 'application/json' } },
+        );
+      },
+    ]);
+    const c = new ChessHttpClient({ gatewayUrl: 'http://localhost:3000', fetchImpl });
+    const session = await c.signup('alice', 'correct-horse-battery');
+    expect(session.playerId).toBe(PLAYER);
+    expect(c.authSession?.username).toBe('alice');
+  });
+
+  it('rejects with status 409 when the username is taken', async () => {
+    const fetchImpl = mockFetch([
+      () => new Response('{"error":"username_taken"}', { status: 409 }),
+    ]);
+    const c = new ChessHttpClient({ gatewayUrl: 'http://localhost:3000', fetchImpl });
+    const err = await c.signup('alice', 'pass').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ChessClientError);
+    expect((err as ChessClientError).status).toBe(409);
   });
 });
 
