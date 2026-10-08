@@ -15,6 +15,13 @@
       "when": 1791094470457,
       "tag": "0001_crazy_human_fly",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791402768255,
+      "tag": "0002_natural_mathemanic",
+      "breakpoints": true
     }
   ]
 }
