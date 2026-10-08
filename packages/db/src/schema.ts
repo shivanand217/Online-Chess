@@ -19,6 +19,9 @@ export const players = pgTable(
   {
     playerId: uuid('player_id').primaryKey().defaultRandom(),
     username: text('username').notNull().unique(),
+    /** bcrypt hash. Nullable to let an existing seed survive the migration; the app refuses to log in
+     *  any player whose hash is null, so legacy rows become inert until re-seeded with a real hash. */
+    passwordHash: text('password_hash'),
     rating: integer('rating').notNull().default(1500),
     gamesPlayed: integer('games_played').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
