@@ -1,4 +1,5 @@
 // API gateway: REST edge for the client. Holds a long-poll for matchmaking and exposes GET /games/:id.
+import fastifyCors from '@fastify/cors';
 import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { createDb } from '@chess/db';
@@ -44,6 +45,12 @@ app.addHook('onClose', async () => {
   await db.close();
 });
 installGracefulShutdown(app, app.log);
+
+// CORS first — a browser preflight (OPTIONS) must succeed before any later route sees traffic.
+await app.register(fastifyCors, {
+  origin: config.CORS_ORIGINS.split(',').map((o) => o.trim()),
+  credentials: true,
+});
 
 await registerAuth(app, {
   db: db.db,

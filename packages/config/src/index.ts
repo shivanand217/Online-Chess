@@ -27,6 +27,12 @@ const EnvSchema = z.object({
   JWT_SECRET: z.string().min(16).default('dev-secret-change-me-in-production'),
   /** Lifetime of a freshly minted token. Suffixed with a unit per `@fastify/jwt`'s conventions. */
   JWT_EXPIRES_IN: z.string().default('12h'),
+
+  /** Comma-separated allowlist of origins the browser frontend may call from. The dev default accepts
+   *  localhost on common frontend ports; production should list the real origin. */
+  CORS_ORIGINS: z
+    .string()
+    .default('http://localhost:3000,http://localhost:4000,http://127.0.0.1:4000'),
 });
 
 export type Config = z.infer<typeof EnvSchema>;
