@@ -17,6 +17,9 @@ export interface AuthDeps {
   db: Database;
   secret: string;
   expiresIn: string;
+  /** Max attempts per IP against auth routes within `rateLimitWindowMs`. */
+  rateLimitMax: number;
+  rateLimitWindowMs: number;
 }
 
 /** JWT claims we embed. `sub` is the playerId; usernames come from the DB on each request. */
@@ -38,7 +41,16 @@ export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promis
     sign: { expiresIn: deps.expiresIn, algorithm: 'HS256' },
   });
 
-  app.post('/auth/signup', async (req, reply) => {
+  // Per-route rate limit for auth endpoints only. Keyed by the client IP; a shared Redis adapter
+  // would be a drop-in upgrade (`redis` option on the plugin), currently in-memory which is enough
+  // for a single-replica gateway. The default errorResponseBuilder returns 429 with Retry-After.
+  const authRateLimit = {
+    max: deps.rateLimitMax,
+    timeWindow: deps.rateLimitWindowMs,
+    keyGenerator: (req: FastifyRequest) => req.ip,
+  };
+
+  app.post('/auth/signup', { config: { rateLimit: authRateLimit } }, async (req, reply) => {
     const parsed = SignupRequest.safeParse(req.body);
     if (!parsed.success) {
       reply.code(400);
@@ -59,7 +71,7 @@ export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promis
     return { token, playerId: player.playerId, username: player.username };
   });
 
-  app.post('/auth/token', async (req, reply) => {
+  app.post('/auth/token', { config: { rateLimit: authRateLimit } }, async (req, reply) => {
     const parsed = TokenRequest.safeParse(req.body);
     if (!parsed.success) {
       reply.code(400);

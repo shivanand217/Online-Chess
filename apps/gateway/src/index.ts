@@ -1,5 +1,6 @@
 // API gateway: REST edge for the client. Holds a long-poll for matchmaking and exposes GET /games/:id.
 import fastifyCors from '@fastify/cors';
+import fastifyRateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { loadConfig } from '@chess/config';
 import { createDb } from '@chess/db';
@@ -52,10 +53,16 @@ await app.register(fastifyCors, {
   credentials: true,
 });
 
+// Rate-limit plugin: registered globally with `global: false` so only opt-in routes carry a limit.
+// Auth routes attach it via their own route config in `registerAuth`.
+await app.register(fastifyRateLimit, { global: false });
+
 await registerAuth(app, {
   db: db.db,
   secret: config.JWT_SECRET,
   expiresIn: config.JWT_EXPIRES_IN,
+  rateLimitMax: config.AUTH_RATE_LIMIT_MAX,
+  rateLimitWindowMs: config.AUTH_RATE_LIMIT_WINDOW_MS,
 });
 registerMatchmakingRoute(app, { subscriber, matchmaker, router });
 registerGamesRoute(app, { db: db.db, router });
