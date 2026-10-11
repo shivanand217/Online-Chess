@@ -11,10 +11,12 @@ import {
   pinoTraceMixin,
 } from '@chess/telemetry';
 import { registerAuth } from './auth.js';
+import { createLeaderboardClient } from './leaderboard-client.js';
 import { createMatchSubscriber } from './match-subscriber.js';
 import { createMatchmakerClient } from './matchmaker-client.js';
 import { createRouterClient } from './router-client.js';
 import { registerGamesRoute } from './routes/games.js';
+import { registerLeaderboardRoutes } from './routes/leaderboard.js';
 import { registerMatchmakingRoute } from './routes/matchmaking.js';
 
 const SERVICE = 'gateway';
@@ -29,6 +31,7 @@ const db = createDb(config.DATABASE_URL);
 const subscriber = await createMatchSubscriber(config.REDIS_URL);
 const matchmaker = createMatchmakerClient(config.MATCHMAKER_URL);
 const router = createRouterClient(config.SESSION_ROUTER_URL);
+const leaderboard = createLeaderboardClient(config.LEADERBOARD_URL);
 
 registerObservability(app, {
   ready: async () => {
@@ -66,6 +69,7 @@ await registerAuth(app, {
 });
 registerMatchmakingRoute(app, { subscriber, matchmaker, router });
 registerGamesRoute(app, { db: db.db, router });
+registerLeaderboardRoutes(app, { leaderboard });
 
 app
   .listen({ port: config.GATEWAY_PORT, host: '0.0.0.0' })
