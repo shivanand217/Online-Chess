@@ -24,6 +24,27 @@ export interface GameSnapshot {
   wsUrl?: string;
 }
 
+export interface LeaderboardEntry {
+  rank: number;
+  playerId: string;
+  username: string;
+  rating: number;
+}
+
+export interface LeaderboardPage {
+  entries: LeaderboardEntry[];
+  offset: number;
+  limit: number;
+}
+
+export interface PlayerRank {
+  playerId: string;
+  username: string;
+  rating: number;
+  rank: number | null;
+  indexedRating: number | null;
+}
+
 export interface HttpOptions {
   gatewayUrl: string;
   /** Replaces the global `fetch` (useful for Node servers that want to inject tracing). */
@@ -97,6 +118,23 @@ export class ChessHttpClient {
     if (res.status === 404) throw new NotFoundError('game_not_found');
     if (!res.ok) throw await this.rejectFromResponse(res, 'get_game_failed');
     return (await res.json()) as GameSnapshot;
+  }
+
+  /** Public read — no auth required. Top N by rating, descending. */
+  async getLeaderboard(limit = 50, offset = 0): Promise<LeaderboardPage> {
+    const url = new URL(`${this.root}/leaderboard`);
+    url.searchParams.set('limit', String(limit));
+    url.searchParams.set('offset', String(offset));
+    const res = await this.fetchImpl(url);
+    if (!res.ok) throw await this.rejectFromResponse(res, 'get_leaderboard_failed');
+    return (await res.json()) as LeaderboardPage;
+  }
+
+  async getPlayerRank(playerId: string): Promise<PlayerRank> {
+    const res = await this.fetchImpl(`${this.root}/players/${encodeURIComponent(playerId)}/rank`);
+    if (res.status === 404) throw new NotFoundError('player_not_found');
+    if (!res.ok) throw await this.rejectFromResponse(res, 'get_player_rank_failed');
+    return (await res.json()) as PlayerRank;
   }
 
   private async authed(url: string, init: RequestInit & { body?: string } = {}): Promise<Response> {

@@ -153,3 +153,57 @@ describe('ChessHttpClient.getGame', () => {
     await expect(c.getGame(GAME)).rejects.toBeInstanceOf(NotFoundError);
   });
 });
+
+describe('ChessHttpClient.getLeaderboard', () => {
+  it('returns a typed page of entries', async () => {
+    const fetchImpl = mockFetch([
+      (url) => {
+        expect(url).toContain('/leaderboard');
+        expect(url).toContain('limit=10');
+        expect(url).toContain('offset=20');
+        return new Response(
+          JSON.stringify({
+            entries: [{ rank: 1, playerId: PLAYER, username: 'alice', rating: 1700 }],
+            offset: 20,
+            limit: 10,
+          }),
+          { status: 200 },
+        );
+      },
+    ]);
+    const c = new ChessHttpClient({ gatewayUrl: 'http://localhost:3000', fetchImpl });
+    const page = await c.getLeaderboard(10, 20);
+    expect(page.entries[0]?.username).toBe('alice');
+    expect(page.offset).toBe(20);
+  });
+});
+
+describe('ChessHttpClient.getPlayerRank', () => {
+  it('returns the rank + rating', async () => {
+    const fetchImpl = mockFetch([
+      (url) => {
+        expect(url).toBe(`http://localhost:3000/players/${PLAYER}/rank`);
+        return new Response(
+          JSON.stringify({
+            playerId: PLAYER,
+            username: 'alice',
+            rating: 1700,
+            rank: 42,
+            indexedRating: 1700,
+          }),
+          { status: 200 },
+        );
+      },
+    ]);
+    const c = new ChessHttpClient({ gatewayUrl: 'http://localhost:3000', fetchImpl });
+    const rank = await c.getPlayerRank(PLAYER);
+    expect(rank.rank).toBe(42);
+    expect(rank.rating).toBe(1700);
+  });
+
+  it('maps 404 to NotFoundError', async () => {
+    const fetchImpl = mockFetch([() => new Response('{}', { status: 404 })]);
+    const c = new ChessHttpClient({ gatewayUrl: 'http://localhost:3000', fetchImpl });
+    await expect(c.getPlayerRank(PLAYER)).rejects.toBeInstanceOf(NotFoundError);
+  });
+});

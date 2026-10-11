@@ -4,7 +4,14 @@ import { ChessHttpClient, type HttpOptions } from './http.js';
 import { GameSession, type ConnectOpts, type WebSocketCtor } from './game-session.js';
 
 export { ChessHttpClient } from './http.js';
-export type { AuthSession, GameSnapshot, HttpOptions } from './http.js';
+export type {
+  AuthSession,
+  GameSnapshot,
+  HttpOptions,
+  LeaderboardEntry,
+  LeaderboardPage,
+  PlayerRank,
+} from './http.js';
 export { GameSession } from './game-session.js';
 export type { ConnectOpts, GameEvent, GameListener, WebSocketCtor } from './game-session.js';
 export * from './errors.js';
