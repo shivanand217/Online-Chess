@@ -2,6 +2,7 @@
 // ephemeral ports. Two long-polls on the same time control must resolve to the same gameId with mirrored
 // colours. Also covers the 408 path and GET /games/:id.
 import { randomUUID } from 'node:crypto';
+import fastifyRateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
@@ -111,10 +112,15 @@ beforeAll(async () => {
   const router = createRouterClient(routerAddr);
 
   gatewayApp = Fastify({ logger: false });
+  await gatewayApp.register(fastifyRateLimit, { global: false });
   await registerAuth(gatewayApp, {
     db: db.db,
     secret: 'test-secret-16-chars-min',
     expiresIn: '1h',
+    // High cap for the shared gateway so earlier tests don't exhaust the per-IP bucket; the
+    // rate-limit case gets its own fastify instance below with a low cap.
+    rateLimitMax: 1_000,
+    rateLimitWindowMs: 60_000,
   });
   registerMatchmakingRoute(gatewayApp, { subscriber, matchmaker, router, timeoutMs: 2_000 });
   registerGamesRoute(gatewayApp, { db: db.db, router });
@@ -350,5 +356,44 @@ describe('GET /games/:id', () => {
   it('404s for an unknown gameId', async () => {
     const res = await fetch(`${gatewayUrl}/games/${randomUUID()}`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe('rate limiting on /auth/token', () => {
+  // Dedicated gateway with a low cap so the shared bucket in the main fixture isn't disturbed.
+  let app: FastifyInstance;
+  let url: string;
+
+  beforeAll(async () => {
+    app = Fastify({ logger: false });
+    await app.register(fastifyRateLimit, { global: false });
+    await registerAuth(app, {
+      db: db.db,
+      secret: 'rl-test-secret-16c',
+      expiresIn: '1h',
+      rateLimitMax: 3,
+      rateLimitWindowMs: 60_000,
+    });
+    url = await app.listen({ port: 0, host: '127.0.0.1' });
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('returns 429 once the per-IP budget is exhausted', async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      const res = await fetch(`${url}/auth/token`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: 'ghost', password: 'wrong' }),
+      });
+      statuses.push(res.status);
+    }
+    // First attempts return 401 (bad creds). Once the per-IP bucket is spent, every subsequent
+    // request is 429 regardless of credentials — the plugin short-circuits before the handler runs.
+    expect(statuses.filter((s) => s === 401).length).toBeLessThanOrEqual(3);
+    expect(statuses.filter((s) => s === 429).length).toBeGreaterThanOrEqual(5);
   });
 });
