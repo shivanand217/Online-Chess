@@ -49,6 +49,8 @@ export type GameEvent =
       result: '1-0' | '0-1' | '1/2-1/2';
       endReason: 'checkmate' | 'stalemate' | 'draw' | 'flag' | 'resign';
     }
+  | { type: 'drawOffered'; from: 'w' | 'b' }
+  | { type: 'drawDeclined' }
   | { type: 'error'; code: string; message: string }
   | { type: 'closed'; code: number; reason: string };
 
@@ -99,6 +101,14 @@ export class GameSession {
     this.send({ type: 'resign' });
   }
 
+  offerDraw(): void {
+    this.send({ type: 'offerDraw' });
+  }
+
+  respondDraw(accept: boolean): void {
+    this.send({ type: 'respondDraw', accept });
+  }
+
   close(): void {
     this.ws.close(1000, 'client');
   }
@@ -147,6 +157,12 @@ export class GameSession {
         break;
       case 'gameEnd':
         this.emit({ type: 'end', result: parsed.result, endReason: parsed.endReason });
+        break;
+      case 'drawOffered':
+        this.emit({ type: 'drawOffered', from: parsed.from });
+        break;
+      case 'drawDeclined':
+        this.emit({ type: 'drawDeclined' });
         break;
       case 'error':
         this.emit({ type: 'error', code: parsed.code, message: parsed.message });
