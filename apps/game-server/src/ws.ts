@@ -208,6 +208,10 @@ export class WsHub {
       await this.handleMove(session, playerId, parsed);
     } else if (parsed.type === 'resign') {
       await this.handleResign(session, playerId);
+    } else if (parsed.type === 'offerDraw') {
+      this.handleOfferDraw(session, playerId);
+    } else if (parsed.type === 'respondDraw') {
+      await this.handleRespondDraw(session, playerId, parsed.accept);
     }
   }
 
@@ -324,6 +328,43 @@ export class WsHub {
     if (!color) return;
     const result: Result = color === 'w' ? '0-1' : '1-0';
     await this.endGame(session, result, 'resign');
+  }
+
+  private handleOfferDraw(session: GameSession, playerId: string): void {
+    if (session.status !== 'active') return;
+    const color = session.colorOf(playerId);
+    if (!color) return;
+    const standing = session.drawOfferedBy;
+    // If the opponent already has a draw offer out, treat our 'offer' as an accept so the two UIs
+    // can't deadlock on cross-fire.
+    if (standing && standing !== color) {
+      void this.endGame(session, '1/2-1/2', 'draw');
+      return;
+    }
+    if (!session.offerDraw(color)) return;
+    this.broadcastExcept(session.gameId, playerId, { type: 'drawOffered', from: color });
+  }
+
+  private async handleRespondDraw(
+    session: GameSession,
+    playerId: string,
+    accept: boolean,
+  ): Promise<void> {
+    if (session.status !== 'active') return;
+    const color = session.colorOf(playerId);
+    if (!color) return;
+    const standing = session.drawOfferedBy;
+    // Only the OPPOSITE side's offer is meaningful here. A responder answering their own offer is a
+    // bug in the UI; silently ignore.
+    if (!standing || standing === color) return;
+
+    if (accept) {
+      await this.endGame(session, '1/2-1/2', 'draw');
+      return;
+    }
+    session.clearDrawOffer();
+    // Tell the original offerer that their offer was declined; the responder doesn't need an echo.
+    this.broadcastExcept(session.gameId, playerId, { type: 'drawDeclined' });
   }
 
   private async endGame(session: GameSession, result: Result, reason: EndReason): Promise<void> {

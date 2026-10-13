@@ -352,6 +352,93 @@ describe('game-server WS', () => {
     b.close();
   });
 
+  it('draw offer accepted: ends the game 1/2-1/2 with endReason draw', async () => {
+    const { white, black, game } = await seedGame();
+    const w = await connect(game.gameId, white.playerId);
+    await w.next();
+    const b = await connect(game.gameId, black.playerId);
+    await b.next();
+
+    w.send({ type: 'offerDraw' });
+    const offered = await b.next();
+    expect(offered.type).toBe('drawOffered');
+    if (offered.type === 'drawOffered') expect(offered.from).toBe('w');
+
+    b.send({ type: 'respondDraw', accept: true });
+    const endW = await w.next();
+    const endB = await b.next();
+    expect(endW.type).toBe('gameEnd');
+    if (endW.type === 'gameEnd') {
+      expect(endW.result).toBe('1/2-1/2');
+      expect(endW.endReason).toBe('draw');
+    }
+    expect(endB.type).toBe('gameEnd');
+
+    const after = await getGame(db.db, game.gameId);
+    expect(after?.status).toBe('finished');
+    expect(after?.result).toBe('1/2-1/2');
+    expect(after?.endReason).toBe('draw');
+    w.close();
+    b.close();
+  });
+
+  it('draw offer declined: offerer gets drawDeclined, game continues', async () => {
+    const { white, black, game } = await seedGame();
+    const w = await connect(game.gameId, white.playerId);
+    await w.next();
+    const b = await connect(game.gameId, black.playerId);
+    await b.next();
+
+    w.send({ type: 'offerDraw' });
+    await b.next(); // drawOffered
+
+    b.send({ type: 'respondDraw', accept: false });
+    const declined = await w.next();
+    expect(declined.type).toBe('drawDeclined');
+
+    // Game is still active — white can play a normal move.
+    w.send({ type: 'sendMove', from: 'e2', to: 'e4', moveNumber: 1 });
+    const ack = await w.next();
+    expect(ack.type).toBe('moveAck');
+    if (ack.type === 'moveAck') expect(ack.accepted).toBe(true);
+
+    w.close();
+    b.close();
+  });
+
+  it('draw offer is cleared by any move: a later accept is a no-op', async () => {
+    const { white, black, game } = await seedGame();
+    const w = await connect(game.gameId, white.playerId);
+    await w.next();
+    const b = await connect(game.gameId, black.playerId);
+    await b.next();
+
+    w.send({ type: 'offerDraw' });
+    await b.next(); // drawOffered
+
+    // White then moves — per FIDE the offer is now dead.
+    w.send({ type: 'sendMove', from: 'e2', to: 'e4', moveNumber: 1 });
+    const ack = await w.next();
+    expect(ack.type).toBe('moveAck');
+    await b.next(); // opponentMove
+
+    // Black's accept arrives too late — the opponent has already played. The server should ignore
+    // it and the game stays active. We verify by expecting next() to time out (no gameEnd).
+    b.send({ type: 'respondDraw', accept: true });
+    let timedOut = false;
+    try {
+      await b.next(250);
+    } catch {
+      timedOut = true;
+    }
+    expect(timedOut).toBe(true);
+
+    const after = await getGame(db.db, game.gameId);
+    expect(after?.status).toBe('active');
+    w.close();
+    b.close();
+  });
+
   it('fencing: a stale-generation write is rejected and the client gets an error', async () => {
     const { white, black, game } = await seedGame();
     const w = await connect(game.gameId, white.playerId);
