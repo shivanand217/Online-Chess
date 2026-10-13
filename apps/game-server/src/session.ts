@@ -47,6 +47,9 @@ export class GameSession {
   private lastMoveAt: number;
   private _ply: number;
   private _status: 'active' | 'finished' = 'active';
+  /** The colour that currently has an outstanding draw offer, or undefined if none. Cleared by any
+   *  move (so there's no timeout to track) and by an explicit decline. */
+  private _drawOfferedBy: Color | undefined;
 
   constructor(init: SessionInit, now: number = Date.now()) {
     this.gameId = init.gameId;
@@ -72,6 +75,22 @@ export class GameSession {
 
   get status(): 'active' | 'finished' {
     return this._status;
+  }
+
+  get drawOfferedBy(): Color | undefined {
+    return this._drawOfferedBy;
+  }
+
+  /** Record a draw offer from `color`. Returns false if there's already one standing (ours or
+   *  the opponent's) — the UI should accept/decline the existing one instead. */
+  offerDraw(color: Color): boolean {
+    if (this._drawOfferedBy) return false;
+    this._drawOfferedBy = color;
+    return true;
+  }
+
+  clearDrawOffer(): void {
+    this._drawOfferedBy = undefined;
   }
 
   colorOf(playerId: string): Color | undefined {
@@ -118,6 +137,9 @@ export class GameSession {
     const movePly = this._ply;
     this._ply = movePly + 1;
     const moveNumber = Math.floor(movePly / 2) + 1;
+    // FIDE: a draw offer expires as soon as either side plays. Keeping it alive would let a stale
+    // offer get accepted after the position changed, which is wrong.
+    this._drawOfferedBy = undefined;
 
     return {
       san: applied.san,

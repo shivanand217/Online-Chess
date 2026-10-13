@@ -103,9 +103,18 @@ export const SendMove = z.object({
   moveNumber: z.number().int().nonnegative(),
   promotion: z.enum(['q', 'r', 'b', 'n']).optional(),
 });
+/** Offer a draw to the opponent. The opponent gets a `drawOffered` event; the offer is cleared the
+ *  moment either side plays a move, so there's no timeout to track. */
+export const OfferDraw = z.object({ type: z.literal('offerDraw') });
+
+/** Accept or decline a pending draw offer. Accepting ends the game 1/2-1/2 with endReason 'draw'. */
+export const RespondDraw = z.object({ type: z.literal('respondDraw'), accept: z.boolean() });
+
 export const ClientMessage = z.discriminatedUnion('type', [
   SendMove,
   z.object({ type: z.literal('resign') }),
+  OfferDraw,
+  RespondDraw,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 
@@ -151,6 +160,10 @@ export const ServerMessage = z.discriminatedUnion('type', [
     result: z.enum(['1-0', '0-1', '1/2-1/2']),
     endReason: z.enum(['checkmate', 'stalemate', 'draw', 'flag', 'resign']),
   }),
+  /** The opponent offered a draw. `from` is the colour that offered. */
+  z.object({ type: z.literal('drawOffered'), from: z.enum(['w', 'b']) }),
+  /** The opponent declined your outstanding draw offer. */
+  z.object({ type: z.literal('drawDeclined') }),
   z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
