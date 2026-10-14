@@ -13,6 +13,7 @@ export type {
   LeaderboardEntry,
   LeaderboardPage,
   MoveRecord,
+  PlayerProfile,
   PlayerRank,
 } from './http.js';
 export { GameSession } from './game-session.js';

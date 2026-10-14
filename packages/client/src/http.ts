@@ -69,6 +69,20 @@ export interface GameHistoryPage {
   nextCursor?: string;
 }
 
+export interface PlayerProfile {
+  playerId: string;
+  username: string;
+  rating: number;
+  gamesPlayed: number;
+  createdAt: string;
+  wins: number;
+  losses: number;
+  draws: number;
+  rank: number | null;
+  ratingHistory: Array<{ at: string; rating: number }>;
+  recentGames: GameHistoryEntry[];
+}
+
 export interface HttpOptions {
   gatewayUrl: string;
   /** Replaces the global `fetch` (useful for Node servers that want to inject tracing). */
@@ -171,6 +185,15 @@ export class ChessHttpClient {
     const res = await this.fetchImpl(url);
     if (!res.ok) throw await this.rejectFromResponse(res, 'get_player_games_failed');
     return (await res.json()) as GameHistoryPage;
+  }
+
+  async getPlayerProfile(username: string): Promise<PlayerProfile> {
+    const res = await this.fetchImpl(
+      `${this.root}/players/${encodeURIComponent(username)}/profile`,
+    );
+    if (res.status === 404) throw new NotFoundError('player_not_found');
+    if (!res.ok) throw await this.rejectFromResponse(res, 'get_player_profile_failed');
+    return (await res.json()) as PlayerProfile;
   }
 
   async getGameMoves(gameId: string): Promise<MoveRecord[]> {
