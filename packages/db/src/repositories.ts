@@ -31,6 +31,56 @@ export async function getPlayerByUsername(
   return rows[0];
 }
 
+export interface PlayerRecord {
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+/** Count the player's finished results, split by W/L/D. Draws are symmetric; wins/losses depend on
+ *  which colour the player was and the result. */
+export async function playerRecord(db: Database, playerId: string): Promise<PlayerRecord> {
+  const rows = await db.execute<{ wins: string; losses: string; draws: string }>(sql`
+    SELECT
+      COUNT(*) FILTER (WHERE (result = '1-0' AND white_id = ${playerId}) OR (result = '0-1' AND black_id = ${playerId}))::text AS wins,
+      COUNT(*) FILTER (WHERE (result = '0-1' AND white_id = ${playerId}) OR (result = '1-0' AND black_id = ${playerId}))::text AS losses,
+      COUNT(*) FILTER (WHERE result = '1/2-1/2' AND (white_id = ${playerId} OR black_id = ${playerId}))::text AS draws
+    FROM games
+    WHERE (white_id = ${playerId} OR black_id = ${playerId}) AND status = 'finished'
+  `);
+  const r = rows.rows[0];
+  return {
+    wins: r ? Number(r.wins) : 0,
+    losses: r ? Number(r.losses) : 0,
+    draws: r ? Number(r.draws) : 0,
+  };
+}
+
+export interface RatingPoint {
+  at: Date;
+  rating: number;
+}
+
+/** Rating at the start of each finished game the player played, oldest first. The caller appends
+ *  the player's current rating as a final point to draw a line to "now". Capped so the response
+ *  stays bounded; a chess career on this stack is unlikely to exceed 500 games anyway. */
+export async function playerRatingHistory(
+  db: Database,
+  playerId: string,
+  limit = 200,
+): Promise<RatingPoint[]> {
+  const rows = await db.execute<{ at: string; rating: number }>(sql`
+    SELECT
+      created_at AS at,
+      CASE WHEN white_id = ${playerId} THEN white_rating_start ELSE black_rating_start END AS rating
+    FROM games
+    WHERE (white_id = ${playerId} OR black_id = ${playerId}) AND status = 'finished'
+    ORDER BY created_at ASC
+    LIMIT ${limit}
+  `);
+  return rows.rows.map((r) => ({ at: new Date(r.at), rating: Number(r.rating) }));
+}
+
 // --- games -------------------------------------------------------------------------------------------
 
 export async function createGame(db: Database, game: NewGame): Promise<Game> {

@@ -145,9 +145,9 @@ describe('listGamesForPlayer', () => {
     const page = await listGamesForPlayer(handle.db, alice.playerId, { limit: 10 });
     expect(page).toHaveLength(3);
     // Newest first — the last-inserted game is first.
-    expect(page[0].myColor).toBe('w');
-    expect(page[1].myColor).toBe('b');
-    expect(page[2].myColor).toBe('w');
+    expect(page[0]?.myColor).toBe('w');
+    expect(page[1]?.myColor).toBe('b');
+    expect(page[2]?.myColor).toBe('w');
     for (const row of page) expect(row.opponent.playerId).toBe(bob.playerId);
   });
 
@@ -169,9 +169,11 @@ describe('listGamesForPlayer', () => {
 
     const first = await listGamesForPlayer(handle.db, me.playerId, { limit: 2 });
     expect(first).toHaveLength(2);
+    const firstCursor = first[1]?.createdAt;
+    if (!firstCursor) throw new Error('expected cursor');
     const second = await listGamesForPlayer(handle.db, me.playerId, {
       limit: 2,
-      cursor: first[1].createdAt,
+      cursor: firstCursor,
     });
     expect(second).toHaveLength(2);
     const allIds = [...first, ...second].map((g) => g.gameId);
