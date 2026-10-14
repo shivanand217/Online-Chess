@@ -12,6 +12,7 @@ import {
   getGame,
   getMoves,
   insertPlayer,
+  listGamesForPlayer,
   takeOwnership,
 } from './repositories.js';
 import { seedPlayers } from './seed.js';
@@ -118,6 +119,63 @@ describe('appendMove — generation-guarded write', () => {
     const log = await getMoves(handle.db, game.gameId);
     expect(log.map((m) => m.ply)).toEqual([0, 1, 2]);
     expect(log.map((m) => m.uci)).toEqual(seq);
+  });
+});
+
+describe('listGamesForPlayer', () => {
+  it('returns both colours newest-first with correct opponent + myColor', async () => {
+    const alice = await insertPlayer(handle.db, { username: `a-${randomUUID()}` });
+    const bob = await insertPlayer(handle.db, { username: `b-${randomUUID()}` });
+
+    // Alice plays white, then black, then white again.
+    for (const [i, white] of [alice, bob, alice].entries()) {
+      const black = white.playerId === alice.playerId ? bob : alice;
+      await createGame(handle.db, {
+        whiteId: white.playerId,
+        blackId: black.playerId,
+        timeControl: 'blitz-3-2',
+        whiteMs: 180_000,
+        blackMs: 180_000,
+        turn: 'w',
+        whiteRatingStart: 1500 + i,
+        blackRatingStart: 1500,
+      });
+    }
+
+    const page = await listGamesForPlayer(handle.db, alice.playerId, { limit: 10 });
+    expect(page).toHaveLength(3);
+    // Newest first — the last-inserted game is first.
+    expect(page[0].myColor).toBe('w');
+    expect(page[1].myColor).toBe('b');
+    expect(page[2].myColor).toBe('w');
+    for (const row of page) expect(row.opponent.playerId).toBe(bob.playerId);
+  });
+
+  it('pages correctly via cursor', async () => {
+    const me = await insertPlayer(handle.db, { username: `me-${randomUUID()}` });
+    const other = await insertPlayer(handle.db, { username: `o-${randomUUID()}` });
+    for (let i = 0; i < 5; i++) {
+      await createGame(handle.db, {
+        whiteId: me.playerId,
+        blackId: other.playerId,
+        timeControl: 'blitz-3-2',
+        whiteMs: 180_000,
+        blackMs: 180_000,
+        turn: 'w',
+        whiteRatingStart: 1500,
+        blackRatingStart: 1500,
+      });
+    }
+
+    const first = await listGamesForPlayer(handle.db, me.playerId, { limit: 2 });
+    expect(first).toHaveLength(2);
+    const second = await listGamesForPlayer(handle.db, me.playerId, {
+      limit: 2,
+      cursor: first[1].createdAt,
+    });
+    expect(second).toHaveLength(2);
+    const allIds = [...first, ...second].map((g) => g.gameId);
+    expect(new Set(allIds).size).toBe(4);
   });
 });
 

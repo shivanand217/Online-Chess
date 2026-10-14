@@ -1,7 +1,7 @@
 // Typed data access over Drizzle. The one non-trivial piece is `appendMove`: it writes the move row and
 // the clock update inside a transaction guarded on the game's `generation`, so a stale owner cannot
 // corrupt a reassigned game.
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, lt, or, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
 import { games, moves, players } from './schema.js';
 import type { Game, Move, NewGame, NewPlayer, Player } from './schema.js';
@@ -44,6 +44,80 @@ export async function getGame(db: Database, gameId: string): Promise<Game | unde
 
 export async function getMoves(db: Database, gameId: string): Promise<Move[]> {
   return db.select().from(moves).where(eq(moves.gameId, gameId)).orderBy(asc(moves.ply));
+}
+
+export interface GameWithOpponent {
+  gameId: string;
+  timeControl: string;
+  status: 'active' | 'finished';
+  result: '1-0' | '0-1' | '1/2-1/2' | null;
+  endReason: string | null;
+  createdAt: Date;
+  myColor: 'w' | 'b';
+  myRatingStart: number;
+  opponent: { playerId: string; username: string; ratingStart: number };
+}
+
+/** Paginated history for one player. Cursor is the previous page's last `createdAt`; pass undefined
+ *  for the first page. Ordered newest-first so the cursor is a `<` on createdAt. */
+export async function listGamesForPlayer(
+  db: Database,
+  playerId: string,
+  opts: { limit?: number; cursor?: Date } = {},
+): Promise<GameWithOpponent[]> {
+  const limit = Math.min(100, Math.max(1, opts.limit ?? 20));
+  const opponentPlayers = players;
+  const base = db
+    .select({
+      gameId: games.gameId,
+      timeControl: games.timeControl,
+      status: games.status,
+      result: games.result,
+      endReason: games.endReason,
+      createdAt: games.createdAt,
+      whiteId: games.whiteId,
+      blackId: games.blackId,
+      whiteRatingStart: games.whiteRatingStart,
+      blackRatingStart: games.blackRatingStart,
+      opponentId: opponentPlayers.playerId,
+      opponentUsername: opponentPlayers.username,
+    })
+    .from(games)
+    .innerJoin(
+      opponentPlayers,
+      // The opponent is whichever side is NOT the viewer.
+      or(
+        and(eq(games.whiteId, playerId), eq(opponentPlayers.playerId, games.blackId)),
+        and(eq(games.blackId, playerId), eq(opponentPlayers.playerId, games.whiteId)),
+      ),
+    )
+    .where(
+      and(
+        or(eq(games.whiteId, playerId), eq(games.blackId, playerId)),
+        ...(opts.cursor ? [lt(games.createdAt, opts.cursor)] : []),
+      ),
+    )
+    .orderBy(desc(games.createdAt))
+    .limit(limit);
+  const rows = await base;
+  return rows.map((r) => {
+    const myColor: 'w' | 'b' = r.whiteId === playerId ? 'w' : 'b';
+    return {
+      gameId: r.gameId,
+      timeControl: r.timeControl,
+      status: r.status,
+      result: r.result,
+      endReason: r.endReason,
+      createdAt: r.createdAt,
+      myColor,
+      myRatingStart: myColor === 'w' ? r.whiteRatingStart : r.blackRatingStart,
+      opponent: {
+        playerId: r.opponentId,
+        username: r.opponentUsername,
+        ratingStart: myColor === 'w' ? r.blackRatingStart : r.whiteRatingStart,
+      },
+    };
+  });
 }
 
 export interface Ownership {
