@@ -18,6 +18,7 @@ import { createRouterClient } from './router-client.js';
 import { registerGamesRoute } from './routes/games.js';
 import { registerLeaderboardRoutes } from './routes/leaderboard.js';
 import { registerMatchmakingRoute } from './routes/matchmaking.js';
+import { registerProfileRoute } from './routes/profile.js';
 
 const SERVICE = 'gateway';
 const config = loadConfig();
@@ -70,6 +71,7 @@ await registerAuth(app, {
 registerMatchmakingRoute(app, { subscriber, matchmaker, router });
 registerGamesRoute(app, { db: db.db, router });
 registerLeaderboardRoutes(app, { leaderboard });
+registerProfileRoute(app, { db: db.db, leaderboard });
 
 app
   .listen({ port: config.GATEWAY_PORT, host: '0.0.0.0' })
