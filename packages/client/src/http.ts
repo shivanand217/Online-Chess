@@ -45,6 +45,30 @@ export interface PlayerRank {
   indexedRating: number | null;
 }
 
+export interface MoveRecord {
+  ply: number;
+  uci: string;
+  san: string;
+  clockMs: number;
+}
+
+export interface GameHistoryEntry {
+  gameId: string;
+  timeControl: string;
+  status: 'active' | 'finished';
+  result: '1-0' | '0-1' | '1/2-1/2' | null;
+  endReason: string | null;
+  createdAt: string;
+  myColor: 'w' | 'b';
+  myRatingStart: number;
+  opponent: { playerId: string; username: string; ratingStart: number };
+}
+
+export interface GameHistoryPage {
+  games: GameHistoryEntry[];
+  nextCursor?: string;
+}
+
 export interface HttpOptions {
   gatewayUrl: string;
   /** Replaces the global `fetch` (useful for Node servers that want to inject tracing). */
@@ -135,6 +159,26 @@ export class ChessHttpClient {
     if (res.status === 404) throw new NotFoundError('player_not_found');
     if (!res.ok) throw await this.rejectFromResponse(res, 'get_player_rank_failed');
     return (await res.json()) as PlayerRank;
+  }
+
+  async getPlayerGames(
+    playerId: string,
+    opts: { limit?: number; cursor?: string } = {},
+  ): Promise<GameHistoryPage> {
+    const url = new URL(`${this.root}/players/${encodeURIComponent(playerId)}/games`);
+    if (opts.limit !== undefined) url.searchParams.set('limit', String(opts.limit));
+    if (opts.cursor) url.searchParams.set('cursor', opts.cursor);
+    const res = await this.fetchImpl(url);
+    if (!res.ok) throw await this.rejectFromResponse(res, 'get_player_games_failed');
+    return (await res.json()) as GameHistoryPage;
+  }
+
+  async getGameMoves(gameId: string): Promise<MoveRecord[]> {
+    const res = await this.fetchImpl(`${this.root}/games/${encodeURIComponent(gameId)}/moves`);
+    if (res.status === 404) throw new NotFoundError('game_not_found');
+    if (!res.ok) throw await this.rejectFromResponse(res, 'get_game_moves_failed');
+    const body = (await res.json()) as { moves: MoveRecord[] };
+    return body.moves;
   }
 
   private async authed(url: string, init: RequestInit & { body?: string } = {}): Promise<Response> {

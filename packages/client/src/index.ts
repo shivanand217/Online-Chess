@@ -6,10 +6,13 @@ import { GameSession, type ConnectOpts, type WebSocketCtor } from './game-sessio
 export { ChessHttpClient } from './http.js';
 export type {
   AuthSession,
+  GameHistoryEntry,
+  GameHistoryPage,
   GameSnapshot,
   HttpOptions,
   LeaderboardEntry,
   LeaderboardPage,
+  MoveRecord,
   PlayerRank,
 } from './http.js';
 export { GameSession } from './game-session.js';
