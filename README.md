@@ -195,6 +195,13 @@ into every Pino log line).
 - `pnpm --filter @chess/db db:seed` — insert `SEED_COUNT` players (default
   10 000).
 
+## Deploying
+
+Fly.io configs for all seven apps (five services, etcd, frontend) are checked
+in. [DEPLOY.md](DEPLOY.md) is the full runbook — managed Postgres + Redis,
+`fly.toml` per service, the one-time secrets, and the frontend's weird
+sibling-repo build context.
+
 ## Design notes
 
 Longer-form stuff lives under `docs/`. The code comments are terse because

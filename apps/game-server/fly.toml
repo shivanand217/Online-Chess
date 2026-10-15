@@ -1,0 +1,37 @@
+# Public WebSocket endpoint. Browser clients connect here for live gameplay. Only one machine for
+# now — the session router's consistent-hash ring would need Fly-Replay sharding to spread across
+# multiple game-server machines; single-instance is fine for a demo.
+app = "chess-game-server"
+primary_region = "iad"
+
+[env]
+  NODE_ENV = "production"
+  GAME_SERVER_PORT = "3003"
+  LOG_LEVEL = "info"
+  ETCD_HOSTS = "http://chess-etcd.flycast:2379"
+  # The URL the router advertises back to clients. Must match the public Fly hostname for this app.
+  GAME_SERVER_PUBLIC_URL = "wss://chess-game-server.fly.dev"
+
+[http_service]
+  internal_port = 3003
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 200
+    soft_limit = 150
+
+[[http_service.checks]]
+  interval = "15s"
+  timeout = "2s"
+  grace_period = "15s"
+  method = "GET"
+  path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

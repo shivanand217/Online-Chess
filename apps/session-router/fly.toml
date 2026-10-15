@@ -1,0 +1,29 @@
+# Internal-only consistent-hash ring over etcd. Reaches the gateway via chess-session-router.flycast
+# on port 3002. Watches the etcd app for game-server membership changes.
+app = "chess-session-router"
+primary_region = "iad"
+
+[env]
+  NODE_ENV = "production"
+  SESSION_ROUTER_PORT = "3002"
+  LOG_LEVEL = "info"
+  ETCD_HOSTS = "http://chess-etcd.flycast:2379"
+
+[[services]]
+  internal_port = 3002
+  protocol = "tcp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 3002
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

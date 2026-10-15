@@ -1,0 +1,44 @@
+# Single-node etcd for the session router's membership registry. Deliberately simple: one machine +
+# one volume. If the machine dies we lose state — fine for a demo since the game-server + session
+# router both re-register on boot. For production use a 3-node cluster or swap this registry for a
+# Redis-backed one.
+app = "chess-etcd"
+primary_region = "iad"
+
+[build]
+  image = "quay.io/coreos/etcd:v3.5.17"
+
+[env]
+  # Advertise + listen on the Fly 6PN network so other apps can resolve chess-etcd.flycast.
+  ETCD_NAME = "node1"
+  ETCD_DATA_DIR = "/data/etcd"
+  ETCD_LISTEN_CLIENT_URLS = "http://0.0.0.0:2379"
+  ETCD_ADVERTISE_CLIENT_URLS = "http://chess-etcd.flycast:2379"
+  ETCD_LISTEN_PEER_URLS = "http://0.0.0.0:2380"
+  ETCD_INITIAL_ADVERTISE_PEER_URLS = "http://chess-etcd.flycast:2380"
+  ETCD_INITIAL_CLUSTER = "node1=http://chess-etcd.flycast:2380"
+  ETCD_INITIAL_CLUSTER_STATE = "new"
+  ETCD_INITIAL_CLUSTER_TOKEN = "chess-etcd-cluster"
+
+[mounts]
+  source = "etcd_data"
+  destination = "/data"
+
+[[services]]
+  internal_port = 2379
+  protocol = "tcp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 2379
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
