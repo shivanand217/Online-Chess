@@ -197,10 +197,11 @@ into every Pino log line).
 
 ## Deploying
 
-Fly.io configs for all seven apps (five services, etcd, frontend) are checked
-in. [DEPLOY.md](DEPLOY.md) is the full runbook — managed Postgres + Redis,
-`fly.toml` per service, the one-time secrets, and the frontend's weird
-sibling-repo build context.
+Target is GCP: Cloud Run for every service, Cloud SQL for Postgres,
+Memorystore for Redis, a single e2-micro Compute Engine VM for etcd.
+[DEPLOY.md](DEPLOY.md) is the full runbook — project + API setup, VPC +
+serverless connector, secrets, build + push to Artifact Registry, deploy
+loop, migrations, and the frontend.
 
 ## Design notes
 
